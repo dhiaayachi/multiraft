@@ -3,6 +3,7 @@ package multiraft
 import (
 	"context"
 	"fmt"
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"io"
 	"strconv"
@@ -11,6 +12,7 @@ import (
 
 const separator = "::"
 
+//go:generate mockery --name TransportRaft --inpackage
 type TransportRaft interface {
 	raft.Transport
 	raft.WithPreVote
@@ -21,6 +23,12 @@ type MuxTransport struct {
 	raftTransport TransportRaft
 	consumerCh    chan RPC
 	cancel        context.CancelFunc
+	// Used for our logging
+	logger hclog.Logger
+}
+
+func (r *MuxTransport) RaftTransport(_ uint64) raft.Transport {
+	return r.raftTransport
 }
 
 func (r *MuxTransport) Consumer() <-chan RPC {
@@ -31,10 +39,8 @@ func (r *MuxTransport) LocalAddr() raft.ServerAddress {
 	return r.raftTransport.LocalAddr()
 }
 
-func commandPartition(command interface{}, partition uint64) interface{} {
-	header := command.(raft.RPCHeader)
-	header.ID = []byte(fmt.Sprintf("%s%s%d", header.ID, separator, partition))
-	return header
+type HeaderType interface {
+	GetRPCHeader() raft.RPCHeader
 }
 
 func (r *MuxTransport) AppendEntriesPipeline(id raft.ServerID, target raft.ServerAddress, partition uint64) (raft.AppendPipeline, error) {
@@ -43,18 +49,18 @@ func (r *MuxTransport) AppendEntriesPipeline(id raft.ServerID, target raft.Serve
 }
 
 func (r *MuxTransport) AppendEntries(id raft.ServerID, target raft.ServerAddress, args *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse, partition uint64) error {
-	command := commandPartition(args, partition)
-	return r.raftTransport.AppendEntries(id, target, command.(*raft.AppendEntriesRequest), resp)
+	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, partition))
+	return r.raftTransport.AppendEntries(id, target, args, resp)
 }
 
 func (r *MuxTransport) RequestVote(id raft.ServerID, target raft.ServerAddress, args *raft.RequestVoteRequest, resp *raft.RequestVoteResponse, partition uint64) error {
-	command := commandPartition(args, partition)
-	return r.raftTransport.RequestVote(id, target, command.(*raft.RequestVoteRequest), resp)
+	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, partition))
+	return r.raftTransport.RequestVote(id, target, args, resp)
 }
 
 func (r *MuxTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest, resp *raft.InstallSnapshotResponse, data io.Reader, partition uint64) error {
-	command := commandPartition(args, partition)
-	return r.raftTransport.InstallSnapshot(id, target, command.(*raft.InstallSnapshotRequest), resp, data)
+	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, partition))
+	return r.raftTransport.InstallSnapshot(id, target, args, resp, data)
 }
 
 func (r *MuxTransport) SetHeartbeatHandler(cb func(rpc raft.RPC)) {
@@ -62,36 +68,38 @@ func (r *MuxTransport) SetHeartbeatHandler(cb func(rpc raft.RPC)) {
 }
 
 func (r *MuxTransport) TimeoutNow(id raft.ServerID, target raft.ServerAddress, args *raft.TimeoutNowRequest, resp *raft.TimeoutNowResponse, partition uint64) error {
-	command := commandPartition(args, partition)
-	return r.raftTransport.TimeoutNow(id, target, command.(*raft.TimeoutNowRequest), resp)
+	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, partition))
+	return r.raftTransport.TimeoutNow(id, target, args, resp)
 }
 
 func (r *MuxTransport) RequestPreVote(id raft.ServerID, target raft.ServerAddress, args *raft.RequestPreVoteRequest, resp *raft.RequestPreVoteResponse, partition uint64) error {
-	command := commandPartition(args, partition)
-	return r.raftTransport.RequestPreVote(id, target, command.(*raft.RequestPreVoteRequest), resp)
+	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, partition))
+	return r.raftTransport.RequestPreVote(id, target, args, resp)
 }
 
 func (r *MuxTransport) Close() error {
 	r.cancel()
+	close(r.consumerCh)
 	return r.raftTransport.Close()
 }
 
 func (r *MuxTransport) transportConsumer(ctx context.Context) {
+	consumer := r.raftTransport.Consumer()
 	for {
 		select {
 		case <-ctx.Done():
 			return
-		case rpc := <-r.raftTransport.Consumer():
-			header := rpc.Command.(*raft.RPCHeader)
+		case rpc := <-consumer:
+			header := rpc.Command.(HeaderType).GetRPCHeader()
 			id := strings.SplitN(string(header.ID), separator, 2)
 			if len(id) != 2 {
-				//TODO: add log here
+				r.logger.Error("invalid rpc command no partition detected", "id", id)
 				continue
 			}
 			header.ID = []byte(id[0])
 			partition, err := strconv.ParseUint(id[1], 10, 64)
 			if err != nil {
-				// TODO: add log here
+				r.logger.Error("not able to parse partition number", "id", id, "partition", partition)
 				continue
 			}
 			newRPC := RPC{

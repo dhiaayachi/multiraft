@@ -1,6 +1,10 @@
 package multiraft
 
-import "github.com/hashicorp/raft"
+import (
+	"fmt"
+	"github.com/hashicorp/go-hclog"
+	"github.com/hashicorp/raft"
+)
 
 type MultiRaft struct {
 	rafts         map[uint64]*raft.Raft
@@ -9,11 +13,15 @@ type MultiRaft struct {
 	logsFactory   LogStoreFactory
 	stableFactory StableStoreFactory
 	snapsFactory  SnapshotStoreFactory
-	trans         raft.Transport
+	trans         Transport
+	logger        hclog.Logger
 }
 
 func (r MultiRaft) AddPartition(u uint64) error {
-	part, err := createPartition(r.conf, r.fsmFactory, r.logsFactory, r.stableFactory, r.snapsFactory, r.trans)
+	if _, ok := r.rafts[u]; ok {
+		return fmt.Errorf("partition %d already exists", u)
+	}
+	part, err := createPartition(r.conf, r.fsmFactory, r.logsFactory, r.stableFactory, r.snapsFactory, r.trans.RaftTransport(u))
 	if err != nil {
 		return err
 	}
@@ -26,7 +34,7 @@ type LogStoreFactory = func() raft.LogStore
 type StableStoreFactory = func() raft.StableStore
 type SnapshotStoreFactory = func() raft.SnapshotStore
 
-func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans raft.Transport) (*MultiRaft, error) {
+func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans Transport) (*MultiRaft, error) {
 
 	multiRaft := MultiRaft{
 		conf:          conf,
