@@ -39,10 +39,6 @@ func (r *MuxTransport) LocalAddr() raft.ServerAddress {
 	return r.raftTransport.LocalAddr()
 }
 
-type HeaderType interface {
-	GetRPCHeader() raft.RPCHeader
-}
-
 func (r *MuxTransport) AppendEntriesPipeline(id raft.ServerID, target raft.ServerAddress, partition uint64) (raft.AppendPipeline, error) {
 	// TODO: fix pipeline to be able to pass partition
 	return r.raftTransport.AppendEntriesPipeline(id, target)
@@ -90,7 +86,7 @@ func (r *MuxTransport) transportConsumer(ctx context.Context) {
 		case <-ctx.Done():
 			return
 		case rpc := <-consumer:
-			header := rpc.Command.(HeaderType).GetRPCHeader()
+			header := rpc.Command.(raft.WithRPCHeader).GetRPCHeader()
 			id := strings.SplitN(string(header.ID), separator, 2)
 			if len(id) != 2 {
 				r.logger.Error("invalid rpc command no partition detected", "id", id)
@@ -101,6 +97,23 @@ func (r *MuxTransport) transportConsumer(ctx context.Context) {
 			if err != nil {
 				r.logger.Error("not able to parse partition number", "id", id, "partition", partition)
 				continue
+			}
+			switch rpc.Command.(type) {
+			case *raft.AppendEntriesRequest:
+				cmd := rpc.Command.(*raft.AppendEntriesRequest)
+				cmd.RPCHeader.ID = []byte(id[0])
+			case *raft.RequestPreVoteRequest:
+				cmd := rpc.Command.(*raft.RequestPreVoteRequest)
+				cmd.RPCHeader.ID = []byte(id[0])
+			case *raft.RequestVoteRequest:
+				cmd := rpc.Command.(*raft.RequestVoteRequest)
+				cmd.RPCHeader.ID = []byte(id[0])
+			case *raft.TimeoutNowRequest:
+				cmd := rpc.Command.(*raft.TimeoutNowRequest)
+				cmd.RPCHeader.ID = []byte(id[0])
+			case *raft.InstallSnapshotRequest:
+				cmd := rpc.Command.(*raft.InstallSnapshotRequest)
+				cmd.RPCHeader.ID = []byte(id[0])
 			}
 			newRPC := RPC{
 				Command:      rpc.Command,
@@ -116,7 +129,8 @@ func (r *MuxTransport) transportConsumer(ctx context.Context) {
 
 func NewMuxTransport(transport TransportRaft) Transport {
 	ctx, cancel := context.WithCancel(context.Background())
-	raftTransport := MuxTransport{raftTransport: transport, consumerCh: make(chan RPC), cancel: cancel}
+	//TODO: fix logger
+	raftTransport := MuxTransport{raftTransport: transport, consumerCh: make(chan RPC), cancel: cancel, logger: hclog.Default()}
 	go raftTransport.transportConsumer(ctx)
 	return &raftTransport
 }

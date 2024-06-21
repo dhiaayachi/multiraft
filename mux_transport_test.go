@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"testing"
+	"time"
 )
 
 func TestMuxTransportNew(t *testing.T) {
@@ -15,6 +16,19 @@ func TestMuxTransportNew(t *testing.T) {
 	trans := NewMuxTransport(mockTransportRaft)
 	defer trans.Close()
 	require.NotNil(t, trans)
+	require.Equal(t, trans.RaftTransport(26), mockTransportRaft)
+
+}
+
+func TestMuxTransportLocalAddr(t *testing.T) {
+	mockTransportRaft := NewMockTransportRaft(t)
+	mockTransportRaft.On("Close").Return(nil)
+	mockTransportRaft.On("LocalAddr").Return(raft.ServerAddress("node-addr-1"))
+	mockTransportRaft.On("Consumer").Maybe().Return(nil)
+	trans := NewMuxTransport(mockTransportRaft)
+	defer trans.Close()
+	require.NotNil(t, trans)
+	require.Equal(t, trans.LocalAddr(), raft.ServerAddress("node-addr-1"))
 
 }
 
@@ -88,4 +102,73 @@ func TestMuxTransportSetHeartbeatHandler(t *testing.T) {
 	require.NotNil(t, trans)
 	trans.SetHeartbeatHandler(func(rpc raft.RPC) {})
 	mockTransportRaft.AssertNumberOfCalls(t, "SetHeartbeatHandler", 1)
+}
+
+func TestMuxTransportConsumer(t *testing.T) {
+	ch := make(chan raft.RPC)
+	mockTransportRaft := NewMockTransportRaft(t)
+	mockTransportRaft.On("Close").Return(nil)
+	mockTransportRaft.On("Consumer").Maybe().Return(ch)
+	trans := NewMuxTransport(mockTransportRaft)
+	defer trans.Close()
+	require.NotNil(t, trans)
+	mch := trans.Consumer()
+	ch <- raft.RPC{Command: &raft.RequestPreVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}}
+	rpc := <-mch
+
+	require.NotNil(t, rpc)
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
+	require.Equal(t, rpc.partitionIdx, uint64(5))
+
+	ch <- raft.RPC{Command: &raft.AppendEntriesRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}}
+	rpc = <-mch
+
+	require.NotNil(t, rpc)
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
+	require.Equal(t, rpc.partitionIdx, uint64(5))
+
+	ch <- raft.RPC{Command: &raft.RequestVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}}
+	rpc = <-mch
+
+	require.NotNil(t, rpc)
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
+	require.Equal(t, rpc.partitionIdx, uint64(5))
+
+	ch <- raft.RPC{Command: &raft.TimeoutNowRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}}
+	rpc = <-mch
+
+	require.NotNil(t, rpc)
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
+	require.Equal(t, rpc.partitionIdx, uint64(5))
+
+	ch <- raft.RPC{Command: &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}}
+	rpc = <-mch
+
+	require.NotNil(t, rpc)
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
+	require.Equal(t, rpc.partitionIdx, uint64(5))
+
+	// no partition
+	ch <- raft.RPC{Command: &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}}
+
+	timer := time.After(50 * time.Millisecond)
+
+	select {
+	case <-timer:
+	case <-mch:
+		t.Fatal("no rpc should happen")
+
+	}
+
+	// invalid partition
+	ch <- raft.RPC{Command: &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "hello")}}}
+
+	timer = time.After(50 * time.Millisecond)
+
+	select {
+	case <-timer:
+	case <-mch:
+		t.Fatal("no rpc should happen")
+
+	}
 }
