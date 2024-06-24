@@ -3,7 +3,6 @@ package multiraft
 import (
 	"fmt"
 	"github.com/dhiaayachi/multiraft/encoding"
-	"github.com/dhiaayachi/multiraft/fsm"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"os"
@@ -46,7 +45,7 @@ func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStore
 	}
 
 	// Create the ZeroPartition, this is safe here as each server need to create a  MultiRaft instance anyway
-	r, err := createPartition(conf, fsmFactory, logsFactory, stableFactory, snapsFactory, trans.RaftTransport(0))
+	r, err := multiRaft.createZeroPartition(conf, fsmFactory, logsFactory, stableFactory, snapsFactory, trans.RaftTransport(0))
 	if err != nil {
 		return nil, err
 	}
@@ -130,8 +129,19 @@ func storePartition(rafts []*raft.Raft, r *raft.Raft) []*raft.Raft {
 	return raftsCopy
 }
 
-func createPartition(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans raft.Transport) (*raft.Raft, error) {
+func (r *MultiRaft) createZeroPartition(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans raft.Transport) (*raft.Raft, error) {
 	f := fsmFactory()
-	zeroFsm := fsm.NewFSM(f)
+	zeroFsm := NewFSM(f, r)
 	return raft.NewRaft(conf, zeroFsm, logsFactory(), stableFactory(), snapsFactory(), trans)
+}
+
+func (r *MultiRaft) addRaft(partition uint32) error {
+	newRaft, err := raft.NewRaft(r.conf, r.fsmFactory(), r.logsFactory(), r.stableFactory(), r.snapsFactory(), r.trans.RaftTransport(partition))
+	if err != nil {
+		return err
+	}
+	oldRafts := r.rafts.Load()
+	newRafts := storePartition(*oldRafts, newRaft)
+	r.rafts.CompareAndSwap(oldRafts, &newRafts)
+	return nil
 }

@@ -17,3 +17,11 @@ func EncodeMsgPack(in interface{}) (*bytes.Buffer, error) {
 	err := enc.Encode(in)
 	return buf, err
 }
+
+// DecodeMsgPack reverses the encode operation on a byte slice input.
+func DecodeMsgPack(buf []byte, out interface{}) error {
+	r := bytes.NewBuffer(buf)
+	hd := codec.MsgpackHandle{}
+	dec := codec.NewDecoder(r, &hd)
+	return dec.Decode(out)
+}
