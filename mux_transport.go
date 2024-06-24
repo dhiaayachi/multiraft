@@ -27,7 +27,7 @@ type MuxTransport struct {
 	logger hclog.Logger
 }
 
-func (r *MuxTransport) RaftTransport(_ uint64) raft.Transport {
+func (r *MuxTransport) RaftTransport(_ uint32) raft.Transport {
 	return r.raftTransport
 }
 

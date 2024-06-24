@@ -172,3 +172,31 @@ func TestMuxTransportConsumer(t *testing.T) {
 
 	}
 }
+
+func TestWithInMemTransport(t *testing.T) {
+	addr := make([]raft.ServerAddress, 2)
+	rTrans := make([]*raft.InmemTransport, 2)
+	mTrans := make([]Transport, 2)
+	addr[0], rTrans[0] = raft.NewInmemTransport("")
+	addr[1], rTrans[1] = raft.NewInmemTransport("")
+
+	for i := 0; i < 2; i++ {
+		mTrans[i] = NewMuxTransport(rTrans[i])
+	}
+
+	ch1 := mTrans[1].Consumer()
+
+	rTrans[0].Connect(addr[1], rTrans[1])
+	ch2 := make(chan RPC)
+	go func() {
+		rsp := <-ch1
+		rsp.RespChan <- raft.RPCResponse{Response: &raft.RequestVoteResponse{}}
+		ch2 <- rsp
+	}()
+
+	require.NoError(t, mTrans[0].RequestVote("id0", addr[1], &raft.RequestVoteRequest{}, &raft.RequestVoteResponse{}, 9))
+	rsp := <-ch2
+	require.NotNil(t, rsp)
+
+	require.Equal(t, uint64(9), rsp.partitionIdx)
+}
