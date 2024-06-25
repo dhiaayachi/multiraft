@@ -93,7 +93,7 @@ func (_m *MockTransportRaft) Consumer() <-chan raft.RPC {
 		r0 = rf()
 	} else {
 		if ret.Get(0) != nil {
-			r0 = ret.Get(0).(chan raft.RPC)
+			r0 = ret.Get(0).(<-chan raft.RPC)
 		}
 	}
 

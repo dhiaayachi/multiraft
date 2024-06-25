@@ -11,6 +11,11 @@ import (
 
 const ZeroPartition = 0
 
+type PartitionConfiguration struct {
+	PartitionID uint32
+	Servers     []raft.Server
+}
+
 type MultiRaft struct {
 	rafts         atomic.Pointer[[]*raft.Raft]
 	conf          *raft.Config
@@ -23,18 +28,13 @@ type MultiRaft struct {
 	partIdx       atomic.Uint32
 }
 
-type PartitionConfiguration struct {
-	PartitionID uint32
-	Servers     []raft.Server
-}
-
 func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans Transport) (*MultiRaft, error) {
 
 	// get logger from the config or create one
 	logger := getOrCreateLogger(conf)
 
 	//Create MultiRaft data struct and store the factories that will be used to create future raft instances.
-	multiRaft := MultiRaft{
+	multiRaft := &MultiRaft{
 		conf:          conf,
 		fsmFactory:    fsmFactory,
 		logsFactory:   logsFactory,
@@ -56,7 +56,7 @@ func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStore
 	rafts = append(rafts, r)
 	multiRaft.rafts.Store(&rafts)
 
-	return &multiRaft, nil
+	return multiRaft, nil
 }
 
 func (r *MultiRaft) AddPartition(servers []raft.ServerID) error {
@@ -131,7 +131,7 @@ func storePartition(rafts []*raft.Raft, r *raft.Raft) []*raft.Raft {
 
 func (r *MultiRaft) createZeroPartition(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans raft.Transport) (*raft.Raft, error) {
 	f := fsmFactory()
-	zeroFsm := NewFSM(f, r)
+	zeroFsm := NewFSM(f, r, r.logger, conf.LocalID)
 	return raft.NewRaft(conf, zeroFsm, logsFactory(), stableFactory(), snapsFactory(), trans)
 }
 
