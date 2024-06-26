@@ -7,6 +7,8 @@ import (
 	"io"
 )
 
+//go:generate mockery --srcpkg=github.com/hashicorp/raft --name=SnapshotSink --inpackage
+
 const indexID = "id"
 const partitionTable = "partition"
 
@@ -63,7 +65,7 @@ func (s *snapshot) Persist(sink raft.SnapshotSink) error {
 		return sink.Cancel()
 	}
 	for entry := iter.Next(); entry != nil; entry = iter.Next() {
-		b, err := encoding.EncodeMsgPack(entry.(PartitionConfiguration))
+		b, err := encoding.EncodeMsgPack(entry.(*PartitionConfiguration))
 		if err != nil {
 			return sink.Cancel()
 		}
@@ -76,6 +78,7 @@ func (s *snapshot) Persist(sink raft.SnapshotSink) error {
 }
 
 func (s *snapshot) Release() {
+	s.txn.Abort()
 }
 
 func (p PartitionState) Snapshot() (raft.FSMSnapshot, error) {
