@@ -1,4 +1,4 @@
-package multiraft
+package transport
 
 import (
 	"github.com/hashicorp/raft"
@@ -12,11 +12,6 @@ type RPC struct {
 	Command      interface{}
 	Reader       io.Reader // Set only for InstallSnapshot
 	RespChan     chan<- raft.RPCResponse
-}
-
-// Respond is used to respond with a response, error or both
-func (r *RPC) Respond(resp interface{}, err error) {
-	r.RespChan <- raft.RPCResponse{Response: resp, Error: err}
 }
 
 // Transport provides an interface for network transports

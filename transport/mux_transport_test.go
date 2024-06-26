@@ -1,4 +1,4 @@
-package multiraft
+package transport
 
 import (
 	"bytes"

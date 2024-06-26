@@ -1,4 +1,4 @@
-package multiraft
+package store
 
 import (
 	"fmt"
@@ -10,18 +10,23 @@ import (
 
 //go:generate mockery --name RaftAdder --inpackage
 type RaftAdder interface {
-	addRaft(id uint32) error
+	AddRaft(id uint32) error
+}
+
+type PartitionConfiguration struct {
+	PartitionID uint32
+	Servers     []raft.Server
 }
 
 type Fsm struct {
 	fsm       raft.FSM
 	logger    hclog.Logger
 	id        raft.ServerID
-	multiRaft RaftAdder
+	raftAdder RaftAdder
 }
 
 func NewFSM(fsm raft.FSM, r RaftAdder, logger hclog.Logger, id raft.ServerID) *Fsm {
-	return &Fsm{fsm: fsm, multiRaft: r, logger: logger, id: id}
+	return &Fsm{fsm: fsm, raftAdder: r, logger: logger, id: id}
 }
 
 func (f *Fsm) Apply(log *raft.Log) interface{} {
@@ -32,7 +37,7 @@ func (f *Fsm) Apply(log *raft.Log) interface{} {
 		return fmt.Errorf("decode raft partition configuration: %w", err)
 	}
 	if f.inServers(conf.Servers) {
-		err := f.multiRaft.addRaft(conf.PartitionID)
+		err := f.raftAdder.AddRaft(conf.PartitionID)
 		if err != nil {
 			f.logger.Error("failed to add raft server", "error", err)
 			return fmt.Errorf("failed to add raft server: %w", err)

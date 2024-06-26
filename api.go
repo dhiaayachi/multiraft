@@ -3,6 +3,8 @@ package multiraft
 import (
 	"fmt"
 	"github.com/dhiaayachi/multiraft/encoding"
+	"github.com/dhiaayachi/multiraft/store"
+	"github.com/dhiaayachi/multiraft/transport"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"os"
@@ -11,11 +13,7 @@ import (
 
 const ZeroPartition = 0
 
-type PartitionConfiguration struct {
-	PartitionID uint32
-	Servers     []raft.Server
-}
-
+//go:generate mockery --name MultiRaft --inpackage
 type MultiRaft struct {
 	rafts         atomic.Pointer[[]*raft.Raft]
 	conf          *raft.Config
@@ -23,12 +21,12 @@ type MultiRaft struct {
 	logsFactory   LogStoreFactory
 	stableFactory StableStoreFactory
 	snapsFactory  SnapshotStoreFactory
-	trans         Transport
+	trans         transport.Transport
 	logger        hclog.Logger
 	partIdx       atomic.Uint32
 }
 
-func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans Transport) (*MultiRaft, error) {
+func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans transport.Transport) (*MultiRaft, error) {
 
 	// get logger from the config or create one
 	logger := getOrCreateLogger(conf)
@@ -93,7 +91,7 @@ func (r *MultiRaft) AddPartition(servers []raft.ServerID) error {
 	// TODO: each server when receiving the config need to check if it's part of the partition
 	//  and create a new raft instance if so. This could be done as part of the FSM of the ZeroPartition
 	// At that point we can also store more metadata about the partition.
-	partConf := PartitionConfiguration{Servers: partServers, PartitionID: u}
+	partConf := store.PartitionConfiguration{Servers: partServers, PartitionID: u}
 	pack, err := encoding.EncodeMsgPack(partConf)
 	if err != nil {
 		return err
@@ -131,11 +129,11 @@ func storePartition(rafts []*raft.Raft, r *raft.Raft) []*raft.Raft {
 
 func (r *MultiRaft) createZeroPartition(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans raft.Transport) (*raft.Raft, error) {
 	f := fsmFactory()
-	zeroFsm := NewFSM(f, r, r.logger, conf.LocalID)
+	zeroFsm := store.NewFSM(f, r, r.logger, conf.LocalID)
 	return raft.NewRaft(conf, zeroFsm, logsFactory(), stableFactory(), snapsFactory(), trans)
 }
 
-func (r *MultiRaft) addRaft(partition uint32) error {
+func (r *MultiRaft) AddRaft(partition uint32) error {
 	newRaft, err := raft.NewRaft(r.conf, r.fsmFactory(), r.logsFactory(), r.stableFactory(), r.snapsFactory(), r.trans.RaftTransport(partition))
 	if err != nil {
 		return err

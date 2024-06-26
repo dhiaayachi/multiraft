@@ -1,4 +1,4 @@
-package multiraft
+package store
 
 import (
 	"fmt"
@@ -15,7 +15,7 @@ func TestFsm_inServers(t *testing.T) {
 		fsm       raft.FSM
 		logger    hclog.Logger
 		id        raft.ServerID
-		multiRaft *MultiRaft
+		raftAdder MockRaftAdder
 	}
 	type args struct {
 		servers []raft.Server
@@ -36,7 +36,7 @@ func TestFsm_inServers(t *testing.T) {
 				fsm:       tt.fields.fsm,
 				logger:    tt.fields.logger,
 				id:        tt.fields.id,
-				multiRaft: tt.fields.multiRaft,
+				raftAdder: NewMockRaftAdder(t),
 			}
 			if got := f.inServers(tt.args.servers); got != tt.want {
 				t.Errorf("inServers() = %v, want %v", got, tt.want)
@@ -48,7 +48,7 @@ func TestFsm_inServers(t *testing.T) {
 func TestApplyCreateRaft(t *testing.T) {
 	raftAdder := NewMockRaftAdder(t)
 	mockFSM := raft.MockFSM{}
-	raftAdder.On("addRaft", mock.Anything).Return(nil)
+	raftAdder.On("AddRaft", mock.Anything).Return(nil)
 	fsm := NewFSM(&mockFSM, raftAdder, hclog.Default(), "id33")
 	encodedLog, err := encoding.EncodeMsgPack(PartitionConfiguration{PartitionID: 44, Servers: []raft.Server{{ID: "id33"}, {ID: "server3"}}})
 	require.NoError(t, err)
@@ -60,7 +60,7 @@ func TestApplyCreateRaft(t *testing.T) {
 func TestApplyCreateRaftAddError(t *testing.T) {
 	raftAdder := NewMockRaftAdder(t)
 	mockFSM := raft.MockFSM{}
-	raftAdder.On("addRaft", mock.Anything).Return(fmt.Errorf("invalid partition"))
+	raftAdder.On("AddRaft", mock.Anything).Return(fmt.Errorf("invalid partition"))
 	fsm := NewFSM(&mockFSM, raftAdder, hclog.Default(), "id33")
 	encodedLog, err := encoding.EncodeMsgPack(PartitionConfiguration{PartitionID: 44, Servers: []raft.Server{{ID: "id33"}, {ID: "server3"}}})
 	require.NoError(t, err)
