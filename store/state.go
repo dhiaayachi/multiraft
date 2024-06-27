@@ -3,6 +3,7 @@ package store
 import (
 	"github.com/dhiaayachi/multiraft/encoding"
 	"github.com/hashicorp/go-memdb"
+	"github.com/hashicorp/go-msgpack/v2/codec"
 	"github.com/hashicorp/raft"
 	"io"
 )
@@ -45,13 +46,18 @@ func NewPartitionState() (raft.FSM, error) {
 }
 
 func (p PartitionState) Apply(log *raft.Log) interface{} {
-	txn := p.db.Txn(true)
+
 	pConf := &PartitionConfiguration{}
 	err := encoding.DecodeMsgPack(log.Data, pConf)
 	if err != nil {
 		return err
 	}
-	err = txn.Insert(partitionTable, pConf)
+	return p.apply(pConf)
+}
+
+func (p PartitionState) apply(pConf *PartitionConfiguration) error {
+	txn := p.db.Txn(true)
+	err := txn.Insert(partitionTable, pConf)
 	if err != nil {
 		return err
 	}
@@ -60,25 +66,31 @@ func (p PartitionState) Apply(log *raft.Log) interface{} {
 }
 
 func (s *snapshot) Persist(sink raft.SnapshotSink) error {
+
 	iter, err := s.txn.Get(partitionTable, indexID)
 	if err != nil {
-		return sink.Cancel()
+		_ = sink.Cancel()
+		return err
 	}
+
 	for entry := iter.Next(); entry != nil; entry = iter.Next() {
 		b, err := encoding.EncodeMsgPack(entry.(*PartitionConfiguration))
 		if err != nil {
-			return sink.Cancel()
+			_ = sink.Cancel()
+			return err
 		}
 		_, err = sink.Write(b.Bytes())
 		if err != nil {
-			return sink.Cancel()
+			_ = sink.Cancel()
+			return err
 		}
 	}
 	return sink.Close()
 }
 
 func (s *snapshot) Release() {
-	s.txn.Abort()
+	// no need to abort the txn here as we create a read transaction
+	// so aborting it is a noop
 }
 
 func (p PartitionState) Snapshot() (raft.FSMSnapshot, error) {
@@ -88,8 +100,22 @@ func (p PartitionState) Snapshot() (raft.FSMSnapshot, error) {
 }
 
 func (p PartitionState) Restore(snapshot io.ReadCloser) error {
-	//TODO implement me
-	panic("implement me")
+	defer snapshot.Close()
+
+	hd := codec.MsgpackHandle{}
+	dec := codec.NewDecoder(snapshot, &hd)
+	conf := PartitionConfiguration{}
+	var err error
+	for err = dec.Decode(&conf); err == nil; {
+		err = p.apply(&conf)
+		if err != nil {
+			return err
+		}
+	}
+	if err == io.EOF {
+		return nil
+	}
+	return err
 }
 
 type snapshot struct {
