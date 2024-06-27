@@ -20,7 +20,7 @@ func TestFsm_inServers(t *testing.T) {
 	type args struct {
 		servers []raft.Server
 	}
-	tests := []struct {
+	tests := []*struct {
 		name   string
 		fields fields
 		args   args
@@ -47,13 +47,12 @@ func TestFsm_inServers(t *testing.T) {
 
 func TestApplyCreateRaft(t *testing.T) {
 	raftAdder := NewMockRaftAdder(t)
-	mockFSM := raft.MockFSM{}
 	raftAdder.On("AddRaft", mock.Anything).Return(nil)
-	fsm := NewFSM(&mockFSM, raftAdder, hclog.Default(), "id33")
+	fsm, err := NewFSM(raftAdder, hclog.Default(), "id33")
+	require.NoError(t, err)
 	encodedLog, err := encoding.EncodeMsgPack(PartitionConfiguration{PartitionID: 44, Servers: []raft.Server{{ID: "id33"}, {ID: "server3"}}})
 	require.NoError(t, err)
-	require.NotNil(t, fsm.Apply(&raft.Log{Data: encodedLog.Bytes()}))
-	require.Len(t, mockFSM.Logs(), 1)
+	require.Nil(t, fsm.Apply(&raft.Log{Data: encodedLog.Bytes()}))
 
 }
 
@@ -61,7 +60,8 @@ func TestApplyCreateRaftAddError(t *testing.T) {
 	raftAdder := NewMockRaftAdder(t)
 	mockFSM := raft.MockFSM{}
 	raftAdder.On("AddRaft", mock.Anything).Return(fmt.Errorf("invalid partition"))
-	fsm := NewFSM(&mockFSM, raftAdder, hclog.Default(), "id33")
+	fsm, err := NewFSM(raftAdder, hclog.Default(), "id33")
+	require.NoError(t, err)
 	encodedLog, err := encoding.EncodeMsgPack(PartitionConfiguration{PartitionID: 44, Servers: []raft.Server{{ID: "id33"}, {ID: "server3"}}})
 	require.NoError(t, err)
 	require.NotNil(t, fsm.Apply(&raft.Log{Data: encodedLog.Bytes()}))
@@ -72,7 +72,8 @@ func TestApplyCreateRaftAddError(t *testing.T) {
 func TestApplyCreateMsgPackError(t *testing.T) {
 	raftAdder := NewMockRaftAdder(t)
 	mockFSM := raft.MockFSM{}
-	fsm := NewFSM(&mockFSM, raftAdder, hclog.Default(), "id33")
+	fsm, err := NewFSM(raftAdder, hclog.Default(), "id33")
+	require.NoError(t, err)
 	encodedLog, err := encoding.EncodeMsgPack("hello")
 	require.NoError(t, err)
 	require.NotNil(t, fsm.Apply(&raft.Log{Data: encodedLog.Bytes()}))

@@ -25,8 +25,12 @@ type Fsm struct {
 	raftAdder RaftAdder
 }
 
-func NewFSM(fsm raft.FSM, r RaftAdder, logger hclog.Logger, id raft.ServerID) *Fsm {
-	return &Fsm{fsm: fsm, raftAdder: r, logger: logger, id: id}
+func NewFSM(r RaftAdder, logger hclog.Logger, id raft.ServerID) (*Fsm, error) {
+	state, err := NewPartitionState()
+	if err != nil {
+		return nil, err
+	}
+	return &Fsm{fsm: state, raftAdder: r, logger: logger, id: id}, nil
 }
 
 func (f *Fsm) Apply(log *raft.Log) interface{} {

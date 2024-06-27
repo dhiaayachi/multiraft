@@ -43,7 +43,7 @@ func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStore
 	}
 
 	// Create the ZeroPartition, this is safe here as each server need to create a  MultiRaft instance anyway
-	r, err := multiRaft.createZeroPartition(conf, fsmFactory, logsFactory, stableFactory, snapsFactory, trans.RaftTransport(0))
+	r, err := multiRaft.createZeroPartition(conf, logsFactory, stableFactory, snapsFactory, trans.RaftTransport(0))
 	if err != nil {
 		return nil, err
 	}
@@ -127,9 +127,8 @@ func storePartition(rafts []*raft.Raft, r *raft.Raft) []*raft.Raft {
 	return raftsCopy
 }
 
-func (r *MultiRaft) createZeroPartition(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans raft.Transport) (*raft.Raft, error) {
-	f := fsmFactory()
-	zeroFsm := store.NewFSM(f, r, r.logger, conf.LocalID)
+func (r *MultiRaft) createZeroPartition(conf *raft.Config, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans raft.Transport) (*raft.Raft, error) {
+	zeroFsm, _ := store.NewFSM(r, r.logger, conf.LocalID)
 	return raft.NewRaft(conf, zeroFsm, logsFactory(), stableFactory(), snapsFactory(), trans)
 }
 

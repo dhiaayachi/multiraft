@@ -45,7 +45,7 @@ func NewPartitionState() (raft.FSM, error) {
 	}, nil
 }
 
-func (p PartitionState) Apply(log *raft.Log) interface{} {
+func (p *PartitionState) Apply(log *raft.Log) interface{} {
 
 	pConf := &PartitionConfiguration{}
 	err := encoding.DecodeMsgPack(log.Data, pConf)
@@ -55,7 +55,7 @@ func (p PartitionState) Apply(log *raft.Log) interface{} {
 	return p.apply(pConf)
 }
 
-func (p PartitionState) apply(pConf *PartitionConfiguration) error {
+func (p *PartitionState) apply(pConf *PartitionConfiguration) error {
 	txn := p.db.Txn(true)
 	err := txn.Insert(partitionTable, pConf)
 	if err != nil {
@@ -93,13 +93,13 @@ func (s *snapshot) Release() {
 	// so aborting it is a noop
 }
 
-func (p PartitionState) Snapshot() (raft.FSMSnapshot, error) {
+func (p *PartitionState) Snapshot() (raft.FSMSnapshot, error) {
 	txn := p.db.Txn(false)
 	return &snapshot{txn: txn}, nil
 
 }
 
-func (p PartitionState) Restore(snapshot io.ReadCloser) error {
+func (p *PartitionState) Restore(snapshot io.ReadCloser) error {
 	defer func() {
 		_ = snapshot.Close()
 	}()
