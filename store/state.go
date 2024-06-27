@@ -100,22 +100,28 @@ func (p PartitionState) Snapshot() (raft.FSMSnapshot, error) {
 }
 
 func (p PartitionState) Restore(snapshot io.ReadCloser) error {
-	defer snapshot.Close()
+	defer func() {
+		_ = snapshot.Close()
+	}()
 
 	hd := codec.MsgpackHandle{}
 	dec := codec.NewDecoder(snapshot, &hd)
-	conf := PartitionConfiguration{}
-	var err error
-	for err = dec.Decode(&conf); err == nil; {
+
+	for {
+		conf := PartitionConfiguration{}
+		err := dec.Decode(&conf)
+		if err == io.EOF {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+
 		err = p.apply(&conf)
 		if err != nil {
 			return err
 		}
 	}
-	if err == io.EOF {
-		return nil
-	}
-	return err
 }
 
 type snapshot struct {

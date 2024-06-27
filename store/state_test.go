@@ -1,11 +1,13 @@
 package store
 
 import (
+	"bytes"
 	"github.com/dhiaayachi/multiraft/encoding"
 	"github.com/dhiaayachi/multiraft/store/mocks"
 	"github.com/hashicorp/raft"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
+	"io"
 	"testing"
 )
 
@@ -73,9 +75,34 @@ func TestStateSnapshot(t *testing.T) {
 	require.NoError(t, err)
 
 	sink := mocks.NewSnapshotSink(t)
-	sink.On("Write", mock.Anything).Return(0, nil)
+	var b []byte
+	sink.On("Write", mock.Anything).Return(0, nil).Run(func(args mock.Arguments) {
+		b = append(b, args.Get(0).([]byte)...)
+
+	})
 	sink.On("Close").Return(nil)
 	err = fsmSnapshot.Persist(sink)
 
 	require.NoError(t, err)
+
+	err = s.Restore(io.NopCloser(bytes.NewBuffer(b)))
+	require.NoError(t, err)
+	s2, err := NewPartitionState()
+	state2 := s2.(*PartitionState)
+	require.Nil(t, err)
+	require.NotNil(t, state2)
+	iter, err := state.db.Txn(false).Get(partitionTable, indexID)
+	require.NoError(t, err)
+	require.NotNil(t, iter)
+	var confs []*PartitionConfiguration
+	for {
+		i := iter.Next()
+		if i == nil {
+			break
+		}
+		confs = append(confs, i.(*PartitionConfiguration))
+	}
+	require.NoError(t, err)
+	require.Len(t, confs, 10)
+
 }
