@@ -48,6 +48,7 @@ func TestFsm_inServers(t *testing.T) {
 func TestApplyCreateRaft(t *testing.T) {
 	raftAdder := NewMockRaftAdder(t)
 	raftAdder.On("AddRaft", mock.Anything).Return(nil)
+	raftAdder.On("Leader", mock.Anything).Return(false)
 	fsm, err := NewFSM(raftAdder, hclog.Default(), "id33")
 	require.NoError(t, err)
 	encodedLog, err := encoding.EncodeMsgPack(PartitionConfiguration{PartitionID: 44, Servers: []raft.Server{{ID: "id33"}, {ID: "server3"}}})

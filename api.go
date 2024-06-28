@@ -26,6 +26,13 @@ type MultiRaft struct {
 	partIdx       atomic.Uint32
 }
 
+func (r *MultiRaft) Leader(id uint32) bool {
+	rafts := *r.rafts.Load()
+	addr, serverID := rafts[id].LeaderWithID()
+	fmt.Printf("dhayachi:: addr%s\n", addr)
+	return serverID == r.conf.LocalID
+}
+
 func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans transport.Transport) (*MultiRaft, error) {
 
 	// get logger from the config or create one
@@ -57,7 +64,7 @@ func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStore
 	return multiRaft, nil
 }
 
-func (r *MultiRaft) AddPartition(servers []raft.ServerID) error {
+func (r *MultiRaft) AddPartition(servers raft.Configuration) error {
 
 	// index start at 0, 0 is reserved for the "ZeroPartition"
 	u := r.partIdx.Add(1)
@@ -72,10 +79,10 @@ func (r *MultiRaft) AddPartition(servers []raft.ServerID) error {
 
 	// Check that the partition servers are part of the ZeroPartition
 	// ZeroPartition is supposed to have all the servers
-	for _, server := range servers {
+	for _, server := range servers.Servers {
 		inConf := false
 		for _, confServer := range ZeroConfiguration.Servers {
-			if server == confServer.ID {
+			if server.ID == confServer.ID {
 				partServers = append(partServers, confServer)
 				inConf = true
 				break
@@ -96,8 +103,9 @@ func (r *MultiRaft) AddPartition(servers []raft.ServerID) error {
 	if err != nil {
 		return err
 	}
-	rafts[ZeroPartition].ApplyLog(raft.Log{Data: pack.Bytes()}, r.conf.HeartbeatTimeout)
-	return nil
+	future := rafts[ZeroPartition].ApplyLog(raft.Log{Data: pack.Bytes()}, r.conf.HeartbeatTimeout)
+
+	return future.Error()
 }
 
 type FsmFactory = func() raft.FSM
@@ -121,19 +129,30 @@ func getOrCreateLogger(conf *raft.Config) hclog.Logger {
 }
 
 func storePartition(rafts []*raft.Raft, r *raft.Raft) []*raft.Raft {
-	var raftsCopy []*raft.Raft
-	copy(raftsCopy, rafts)
+	raftsCopy := make([]*raft.Raft, 0)
+	raftsCopy = append(raftsCopy, rafts...)
 	raftsCopy = append(raftsCopy, r)
 	return raftsCopy
 }
 
 func (r *MultiRaft) createZeroPartition(conf *raft.Config, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans raft.Transport) (*raft.Raft, error) {
-	zeroFsm, _ := store.NewFSM(r, r.logger, conf.LocalID)
+
+	if r.conf.Logger != nil {
+		r.conf.Logger = r.conf.Logger.Named(fmt.Sprintf("raft-%d-%s", 0, r.conf.LocalID))
+	} else {
+		r.conf.Logger = hclog.Default().Named(fmt.Sprintf("raft-%d-%s", 0, r.conf.LocalID))
+	}
+	zeroFsm, _ := store.NewFSM(r, r.conf.Logger.With("id", conf.LocalID), conf.LocalID)
 	return raft.NewRaft(conf, zeroFsm, logsFactory(), stableFactory(), snapsFactory(), trans)
 }
 
 func (r *MultiRaft) AddRaft(partition uint32) error {
 	newTransport := r.trans.NewPartition(partition)
+	if r.conf.Logger != nil {
+		r.conf.Logger = r.conf.Logger.Named(fmt.Sprintf("raft-%d-%s", partition, r.conf.LocalID))
+	} else {
+		r.conf.Logger = hclog.Default().Named(fmt.Sprintf("raft-%d-%s", partition, r.conf.LocalID))
+	}
 	newRaft, err := raft.NewRaft(r.conf, r.fsmFactory(), r.logsFactory(), r.stableFactory(), r.snapsFactory(), newTransport)
 	if err != nil {
 		return err
@@ -144,7 +163,7 @@ func (r *MultiRaft) AddRaft(partition uint32) error {
 	return nil
 }
 
-func (r *MultiRaft) BootstrapCluster(conf raft.Configuration) raft.Future {
+func (r *MultiRaft) BootstrapCluster(conf raft.Configuration, partition uint32) raft.Future {
 	rafts := *r.rafts.Load()
-	return rafts[ZeroPartition].BootstrapCluster(conf)
+	return rafts[partition].BootstrapCluster(conf)
 }

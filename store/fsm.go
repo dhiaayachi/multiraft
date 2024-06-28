@@ -8,9 +8,13 @@ import (
 	"io"
 )
 
+const ZeroPartition = 0
+
 //go:generate mockery --name RaftAdder --inpackage
 type RaftAdder interface {
 	AddRaft(id uint32) error
+	Leader(id uint32) bool
+	BootstrapCluster(conf raft.Configuration, partition uint32) raft.Future
 }
 
 type PartitionConfiguration struct {
@@ -41,11 +45,21 @@ func (f *Fsm) Apply(log *raft.Log) interface{} {
 		return fmt.Errorf("decode raft partition configuration: %w", err)
 	}
 	if f.inServers(conf.Servers) {
+		f.logger.Info("adding new raft partition", "part-id", conf.PartitionID, "servers", conf.Servers)
 		err := f.raftAdder.AddRaft(conf.PartitionID)
 		if err != nil {
 			f.logger.Error("failed to add raft server", "error", err)
 			return fmt.Errorf("failed to add raft server: %w", err)
 		}
+
+		if f.raftAdder.Leader(ZeroPartition) {
+			f.logger.Info("bootstrapping new raft partition", "part-id", conf.PartitionID, "servers", conf.Servers)
+			future := f.raftAdder.BootstrapCluster(raft.Configuration{Servers: conf.Servers}, conf.PartitionID)
+			if err := future.Error(); err != nil {
+				return err
+			}
+		}
+
 	}
 	return f.fsm.Apply(log)
 }

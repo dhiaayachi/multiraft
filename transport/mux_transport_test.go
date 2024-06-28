@@ -16,7 +16,6 @@ func TestMuxTransportNew(t *testing.T) {
 	trans := NewMuxTransport(mockTransportRaft)
 	defer trans.Close()
 	require.NotNil(t, trans)
-	require.Equal(t, trans.RaftTransport(26), mockTransportRaft)
 
 }
 
@@ -34,13 +33,13 @@ func TestMuxTransportLocalAddr(t *testing.T) {
 
 func TestMuxTransportAppendEntries(t *testing.T) {
 	mockTransportRaft := NewMockTransportRaft(t)
-	mockTransportRaft.On("AppendEntries", raft.ServerID("node1"), raft.ServerAddress("node1-addr"), &raft.AppendEntriesRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}, mock.Anything).Return(nil)
+	mockTransportRaft.On("AppendEntries", raft.ServerID("node1"), raft.ServerAddress("node1-addr"), &raft.AppendEntriesRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: uint32(1)}}}, mock.Anything).Return(nil)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
-	trans := NewMuxTransport(mockTransportRaft)
+	trans := NewMuxTransport(mockTransportRaft).NewPartition(1)
 	defer trans.Close()
 	require.NotNil(t, trans)
-	require.NoError(t, trans.AppendEntries("node1", "node1-addr", &raft.AppendEntriesRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.AppendEntriesResponse{}, 5))
+	require.NoError(t, trans.AppendEntries("node1", "node1-addr", &raft.AppendEntriesRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.AppendEntriesResponse{}))
 	mockTransportRaft.AssertNumberOfCalls(t, "AppendEntries", 1)
 }
 
@@ -48,11 +47,11 @@ func TestMuxTransportRequestVote(t *testing.T) {
 	mockTransportRaft := NewMockTransportRaft(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
-	mockTransportRaft.On("RequestVote", raft.ServerID("node1"), raft.ServerAddress("node1-addr"), &raft.RequestVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}, mock.Anything).Return(nil)
-	trans := NewMuxTransport(mockTransportRaft)
+	mockTransportRaft.On("RequestVote", raft.ServerID("node1"), raft.ServerAddress("node1-addr"), &raft.RequestVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: uint32(22)}}}, mock.Anything).Return(nil)
+	trans := NewMuxTransport(mockTransportRaft).NewPartition(22)
 	defer trans.Close()
 	require.NotNil(t, trans)
-	require.NoError(t, trans.RequestVote("node1", "node1-addr", &raft.RequestVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.RequestVoteResponse{}, 5))
+	require.NoError(t, trans.RequestVote("node1", "node1-addr", &raft.RequestVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.RequestVoteResponse{}))
 	mockTransportRaft.AssertNumberOfCalls(t, "RequestVote", 1)
 }
 
@@ -60,11 +59,11 @@ func TestMuxTransportInstallSnapshot(t *testing.T) {
 	mockTransportRaft := NewMockTransportRaft(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
-	mockTransportRaft.On("InstallSnapshot", raft.ServerID("node1"), raft.ServerAddress("node1-addr"), &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}, mock.Anything, mock.Anything).Return(nil)
-	trans := NewMuxTransport(mockTransportRaft)
+	mockTransportRaft.On("InstallSnapshot", raft.ServerID("node1"), raft.ServerAddress("node1-addr"), &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: uint32(33)}}}, mock.Anything, mock.Anything).Return(nil)
+	trans := NewMuxTransport(mockTransportRaft).NewPartition(33)
 	defer trans.Close()
 	require.NotNil(t, trans)
-	require.NoError(t, trans.InstallSnapshot("node1", "node1-addr", &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.InstallSnapshotResponse{}, &bytes.Buffer{}, 5))
+	require.NoError(t, trans.InstallSnapshot("node1", "node1-addr", &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.InstallSnapshotResponse{}, &bytes.Buffer{}))
 	mockTransportRaft.AssertNumberOfCalls(t, "InstallSnapshot", 1)
 }
 
@@ -72,11 +71,11 @@ func TestMuxTransportTimeoutNow(t *testing.T) {
 	mockTransportRaft := NewMockTransportRaft(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
-	mockTransportRaft.On("TimeoutNow", raft.ServerID("node1"), raft.ServerAddress("node1-addr"), &raft.TimeoutNowRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}, mock.Anything).Return(nil)
-	trans := NewMuxTransport(mockTransportRaft)
+	mockTransportRaft.On("TimeoutNow", raft.ServerID("node1"), raft.ServerAddress("node1-addr"), &raft.TimeoutNowRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: uint32(32)}}}, mock.Anything).Return(nil)
+	trans := NewMuxTransport(mockTransportRaft).NewPartition(32)
 	defer trans.Close()
 	require.NotNil(t, trans)
-	require.NoError(t, trans.TimeoutNow("node1", "node1-addr", &raft.TimeoutNowRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.TimeoutNowResponse{}, 5))
+	require.NoError(t, trans.TimeoutNow("node1", "node1-addr", &raft.TimeoutNowRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.TimeoutNowResponse{}))
 	mockTransportRaft.AssertNumberOfCalls(t, "TimeoutNow", 1)
 }
 
@@ -84,11 +83,11 @@ func TestMuxTransportRequestPreVote(t *testing.T) {
 	mockTransportRaft := NewMockTransportRaft(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
-	mockTransportRaft.On("RequestPreVote", raft.ServerID("node1"), raft.ServerAddress("node1-addr"), &raft.RequestPreVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}, mock.Anything).Return(nil)
-	trans := NewMuxTransport(mockTransportRaft)
+	mockTransportRaft.On("RequestPreVote", raft.ServerID("node1"), raft.ServerAddress("node1-addr"), &raft.RequestPreVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: uint32(21)}}}, mock.Anything).Return(nil)
+	trans := NewMuxTransport(mockTransportRaft).NewPartition(21)
 	defer trans.Close()
 	require.NotNil(t, trans)
-	require.NoError(t, trans.RequestPreVote("node1", "node1-addr", &raft.RequestPreVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.RequestPreVoteResponse{}, 5))
+	require.NoError(t, trans.RequestPreVote("node1", "node1-addr", &raft.RequestPreVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.RequestPreVoteResponse{}))
 	mockTransportRaft.AssertNumberOfCalls(t, "RequestPreVote", 1)
 }
 
@@ -109,44 +108,44 @@ func TestMuxTransportConsumer(t *testing.T) {
 	mockTransportRaft := NewMockTransportRaft(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(ch)
-	trans := NewMuxTransport(mockTransportRaft)
+	trans := NewMuxTransport(mockTransportRaft).NewPartition(5)
 	defer trans.Close()
 	require.NotNil(t, trans)
 	mch := trans.Consumer()
-	ch <- raft.RPC{Command: &raft.RequestPreVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}}
+	ch <- raft.RPC{Command: &raft.RequestPreVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: uint32(5)}}}}
 	rpc := <-mch
 
 	require.NotNil(t, rpc)
 	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
-	require.Equal(t, rpc.partitionIdx, uint64(5))
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], uint32(5))
 
-	ch <- raft.RPC{Command: &raft.AppendEntriesRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}}
+	ch <- raft.RPC{Command: &raft.AppendEntriesRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: uint32(5)}}}}
 	rpc = <-mch
 
 	require.NotNil(t, rpc)
 	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
-	require.Equal(t, rpc.partitionIdx, uint64(5))
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], uint32(5))
 
-	ch <- raft.RPC{Command: &raft.RequestVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}}
+	ch <- raft.RPC{Command: &raft.RequestVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: uint32(5)}}}}
 	rpc = <-mch
 
 	require.NotNil(t, rpc)
 	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
-	require.Equal(t, rpc.partitionIdx, uint64(5))
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], uint32(5))
 
-	ch <- raft.RPC{Command: &raft.TimeoutNowRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}}
+	ch <- raft.RPC{Command: &raft.TimeoutNowRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: uint32(5)}}}}
 	rpc = <-mch
 
 	require.NotNil(t, rpc)
 	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
-	require.Equal(t, rpc.partitionIdx, uint64(5))
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], uint32(5))
 
-	ch <- raft.RPC{Command: &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1" + separator + "5")}}}
+	ch <- raft.RPC{Command: &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: uint32(5)}}}}
 	rpc = <-mch
 
 	require.NotNil(t, rpc)
 	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
-	require.Equal(t, rpc.partitionIdx, uint64(5))
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], uint32(5))
 
 	// no partition
 	ch <- raft.RPC{Command: &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}}
@@ -181,22 +180,20 @@ func TestWithInMemTransport(t *testing.T) {
 	addr[1], rTrans[1] = raft.NewInmemTransport("")
 
 	for i := 0; i < 2; i++ {
-		mTrans[i] = NewMuxTransport(rTrans[i])
+		mTrans[i] = NewMuxTransport(rTrans[i]).NewPartition(9)
 	}
 
 	ch1 := mTrans[1].Consumer()
 
 	rTrans[0].Connect(addr[1], rTrans[1])
-	ch2 := make(chan RPC)
+	var rsp raft.RPC
 	go func() {
-		rsp := <-ch1
+		rsp = <-ch1
 		rsp.RespChan <- raft.RPCResponse{Response: &raft.RequestVoteResponse{}}
-		ch2 <- rsp
+
 	}()
 
-	require.NoError(t, mTrans[0].RequestVote("id0", addr[1], &raft.RequestVoteRequest{}, &raft.RequestVoteResponse{}, 9))
-	rsp := <-ch2
+	require.NoError(t, mTrans[0].RequestVote("id0", addr[1], &raft.RequestVoteRequest{}, &raft.RequestVoteResponse{}))
 	require.NotNil(t, rsp)
-
-	require.Equal(t, uint64(9), rsp.partitionIdx)
+	require.Equal(t, uint32(9), rsp.Command.(*raft.RequestVoteRequest).GetRPCHeader().Meta[partitionKey])
 }

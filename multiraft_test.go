@@ -6,6 +6,7 @@ import (
 	"github.com/hashicorp/raft"
 	"github.com/stretchr/testify/require"
 	"testing"
+	"time"
 )
 
 func TestCreateMultiRaft(t *testing.T) {
@@ -88,18 +89,22 @@ func TestCreateCluster(t *testing.T) {
 			Address: mrs[i].addr,
 		})
 	}
-	f := mrs[0].mr.BootstrapCluster(configuration)
+	f := mrs[0].mr.BootstrapCluster(configuration, 0)
 	require.NoError(t, f.Error())
 	rafts := *mrs[0].mr.rafts.Load()
 
+	time.Sleep(100 * time.Millisecond)
 	ch := rafts[0].LeaderCh()
 
 	<-ch
 
 	leader, _ := rafts[0].LeaderWithID()
 	require.NotEmpty(t, leader)
+	time.Sleep(100 * time.Millisecond)
 
-	err = mrs[0].mr.AddPartition([]raft.ServerID{"id0", "id1", "id2"})
+	err = mrs[0].mr.AddPartition(configuration)
 
 	require.NoError(t, err)
+	time.Sleep(100 * time.Millisecond)
+
 }
