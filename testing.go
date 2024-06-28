@@ -2,6 +2,7 @@ package multiraft
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/dhiaayachi/multiraft/consts"
 	"github.com/dhiaayachi/multiraft/transport"
@@ -137,13 +138,14 @@ func (c *cluster) WaitEventChan(ctx context.Context, filter raft.FilterFn) <-cha
 }
 
 func createCluster(t *testing.T, num int) (*cluster, error) {
-	config := raft.DefaultConfig()
-	addr, transportRaft := raft.NewInmemTransport("")
-	mrs := make([]*MultiRaft, num)
-	addrs := make([]raft.ServerAddress, num)
-	ids := make([]raft.ServerID, num)
-	transports := make([]*raft.InmemTransport, num)
+
+	mrs := make([]*MultiRaft, 0)
+	addrs := make([]raft.ServerAddress, 0)
+	ids := make([]raft.ServerID, 0)
+	transports := make([]*raft.InmemTransport, 0)
 	for i := 0; i < num; i++ {
+		config := raft.DefaultConfig()
+		addr, transportRaft := raft.NewInmemTransport("")
 		config.LocalID = raft.ServerID(fmt.Sprintf("id%d", i))
 		multiRaft, err := NewMultiRaft(
 			config,
@@ -169,6 +171,19 @@ func createCluster(t *testing.T, num int) (*cluster, error) {
 		ids = append(ids, config.LocalID)
 		transports = append(transports, transportRaft)
 	}
-	return &cluster{t: t, mr: mrs, addr: addrs, id: []raft.ServerID{}}, nil
+	return &cluster{t: t, mr: mrs, addr: addrs, id: ids, trans: transports, logger: hclog.Default(), startTime: time.Now(), longstopTimeout: 5 * time.Second}, nil
 
+}
+
+func waitForLeader(c *cluster, partition consts.PartitionType) error {
+	count := 0
+	for count < 100 {
+		r := c.GetInState(raft.Leader, partition)
+		if len(r) >= 1 {
+			return nil
+		}
+		count++
+		time.Sleep(50 * time.Millisecond)
+	}
+	return errors.New("no leader elected")
 }
