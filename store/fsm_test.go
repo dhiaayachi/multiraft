@@ -51,7 +51,7 @@ func TestApplyCreateRaft(t *testing.T) {
 	raftAdder.On("Leader", mock.Anything).Return(false)
 	fsm, err := NewFSM(raftAdder, hclog.Default(), "id33")
 	require.NoError(t, err)
-	encodedLog, err := encoding.EncodeMsgPack(PartitionConfiguration{PartitionID: 44, Servers: []raft.Server{{ID: "id33"}, {ID: "server3"}}})
+	encodedLog, err := encoding.EncodeMsgPack(PartitionConfiguration{PartitionID: "part44", Servers: []raft.Server{{ID: "id33"}, {ID: "server3"}}})
 	require.NoError(t, err)
 	require.Nil(t, fsm.Apply(&raft.Log{Data: encodedLog.Bytes()}))
 
@@ -63,7 +63,7 @@ func TestApplyCreateRaftAddError(t *testing.T) {
 	raftAdder.On("AddRaft", mock.Anything).Return(fmt.Errorf("invalid partition"))
 	fsm, err := NewFSM(raftAdder, hclog.Default(), "id33")
 	require.NoError(t, err)
-	encodedLog, err := encoding.EncodeMsgPack(PartitionConfiguration{PartitionID: 44, Servers: []raft.Server{{ID: "id33"}, {ID: "server3"}}})
+	encodedLog, err := encoding.EncodeMsgPack(PartitionConfiguration{PartitionID: "part44", Servers: []raft.Server{{ID: "id33"}, {ID: "server3"}}})
 	require.NoError(t, err)
 	require.NotNil(t, fsm.Apply(&raft.Log{Data: encodedLog.Bytes()}))
 	require.Len(t, mockFSM.Logs(), 0)

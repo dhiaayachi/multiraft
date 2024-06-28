@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"github.com/dhiaayachi/multiraft/consts"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"io"
@@ -9,7 +10,6 @@ import (
 
 const separator = "::"
 const partitionKey = "partition"
-const ZeroPartition = 0
 
 //go:generate mockery --name TransportRaft --inpackage
 type TransportRaft interface {
@@ -25,14 +25,14 @@ type RaftRPCHeader struct {
 
 type MuxTransport struct {
 	raftTransport TransportRaft
-	consumerCh    map[uint32]chan raft.RPC
+	consumerCh    map[consts.PartitionType]chan raft.RPC
 	cancel        context.CancelFunc
 	// Used for our logging
 	logger    hclog.Logger
-	partition uint32
+	partition consts.PartitionType
 }
 
-func (r *MuxTransport) NewPartition(partition uint32) Transport {
+func (r *MuxTransport) NewPartition(partition consts.PartitionType) Transport {
 	r.consumerCh[partition] = make(chan raft.RPC)
 	return &MuxTransport{raftTransport: r.raftTransport, partition: partition, consumerCh: r.consumerCh, cancel: r.cancel, logger: r.logger}
 }
@@ -151,12 +151,16 @@ func (r *MuxTransport) transportConsumer(ctx context.Context) {
 				continue
 			}
 			partition, ok := header.Meta[partitionKey]
-			p32 := partition.(uint32)
+
 			if !ok {
 				r.logger.Error("not able to parse meta for partition key")
 				continue
 			}
-
+			p32, ok := partition.(consts.PartitionType)
+			if !ok {
+				r.logger.Error("not able to parse meta for partition key (type)")
+				continue
+			}
 			newRPC := raft.RPC{
 				Command:  rpc.Command,
 				Reader:   rpc.Reader,
@@ -174,7 +178,7 @@ func (r *MuxTransport) transportConsumer(ctx context.Context) {
 func NewMuxTransport(transport TransportRaft) Transport {
 	ctx, cancel := context.WithCancel(context.Background())
 	//TODO: fix logger
-	raftTransport := MuxTransport{raftTransport: transport, consumerCh: make(map[uint32]chan raft.RPC), cancel: cancel, logger: hclog.Default(), partition: ZeroPartition}
+	raftTransport := MuxTransport{raftTransport: transport, consumerCh: make(map[consts.PartitionType]chan raft.RPC), cancel: cancel, logger: hclog.Default(), partition: consts.ZeroPartition}
 	go raftTransport.transportConsumer(ctx)
 	return &raftTransport
 }

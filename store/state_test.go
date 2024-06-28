@@ -2,6 +2,8 @@ package store
 
 import (
 	"bytes"
+	"fmt"
+	"github.com/dhiaayachi/multiraft/consts"
 	"github.com/dhiaayachi/multiraft/encoding"
 	"github.com/dhiaayachi/multiraft/store/mocks"
 	"github.com/hashicorp/raft"
@@ -19,20 +21,20 @@ func TestCreateStateAndApply(t *testing.T) {
 	require.NotNil(t, state)
 
 	//Apply a log
-	applyPartition(t, state, 1)
+	applyPartition(t, state, "part1")
 
 	// Apply another log
-	applyPartition(t, state, 2)
+	applyPartition(t, state, "part2")
 
 	// Read the first entry and check it's ok
-	iter, err := state.db.Txn(false).Get(partitionTable, indexID, uint32(1))
+	iter, err := state.db.Txn(false).Get(partitionTable, indexID, "part1")
 
 	require.NoError(t, err)
 
 	c := iter.Next().(*PartitionConfiguration)
 	require.NotNil(t, c)
 
-	require.Equal(t, c.PartitionID, uint32(1))
+	require.Equal(t, c.PartitionID, consts.PartitionType("part1"))
 
 	require.Nil(t, iter.Next())
 
@@ -43,16 +45,16 @@ func TestCreateStateAndApply(t *testing.T) {
 
 	c = iter.Next().(*PartitionConfiguration)
 	require.NotNil(t, c)
-	require.Equal(t, c.PartitionID, uint32(1))
+	require.Equal(t, c.PartitionID, consts.PartitionType("part1"))
 
 	c = iter.Next().(*PartitionConfiguration)
 	require.NotNil(t, c)
-	require.Equal(t, c.PartitionID, uint32(2))
+	require.Equal(t, c.PartitionID, consts.PartitionType("part2"))
 
 	require.Nil(t, iter.Next())
 }
 
-func applyPartition(t *testing.T, state *PartitionState, id uint32) {
+func applyPartition(t *testing.T, state *PartitionState, id consts.PartitionType) {
 	pack, err := encoding.EncodeMsgPack(PartitionConfiguration{
 		PartitionID: id,
 	})
@@ -67,7 +69,7 @@ func TestStateSnapshot(t *testing.T) {
 	require.Nil(t, err)
 	require.NotNil(t, state)
 	for i := 0; i < 10; i++ {
-		applyPartition(t, state, uint32(i))
+		applyPartition(t, state, consts.PartitionType(fmt.Sprintf("part%d", i)))
 	}
 
 	fsmSnapshot, err := state.Snapshot()

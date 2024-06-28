@@ -29,7 +29,7 @@ func NewPartitionState() (raft.FSM, error) {
 						Name:         indexID,
 						AllowMissing: false,
 						Unique:       true,
-						Indexer:      &memdb.UintFieldIndex{Field: "PartitionID"},
+						Indexer:      &memdb.StringFieldIndex{Field: "PartitionID"},
 					},
 				},
 			},

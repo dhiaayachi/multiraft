@@ -2,23 +2,22 @@ package store
 
 import (
 	"fmt"
+	"github.com/dhiaayachi/multiraft/consts"
 	"github.com/dhiaayachi/multiraft/encoding"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"io"
 )
 
-const ZeroPartition = 0
-
 //go:generate mockery --name RaftAdder --inpackage
 type RaftAdder interface {
-	AddRaft(id uint32) error
-	Leader(id uint32) bool
-	BootstrapCluster(conf raft.Configuration, partition uint32) raft.Future
+	AddRaft(id consts.PartitionType) error
+	Leader(id consts.PartitionType) bool
+	BootstrapCluster(conf raft.Configuration, partition consts.PartitionType) raft.Future
 }
 
 type PartitionConfiguration struct {
-	PartitionID uint32
+	PartitionID consts.PartitionType
 	Servers     []raft.Server
 }
 
@@ -52,7 +51,7 @@ func (f *Fsm) Apply(log *raft.Log) interface{} {
 			return fmt.Errorf("failed to add raft server: %w", err)
 		}
 
-		if f.raftAdder.Leader(ZeroPartition) {
+		if f.id == conf.Servers[0].ID {
 			f.logger.Info("bootstrapping new raft partition", "part-id", conf.PartitionID, "servers", conf.Servers)
 			future := f.raftAdder.BootstrapCluster(raft.Configuration{Servers: conf.Servers}, conf.PartitionID)
 			if err := future.Error(); err != nil {
