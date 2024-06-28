@@ -21,55 +21,68 @@ type TransportRaft interface {
 
 type MuxTransport struct {
 	raftTransport TransportRaft
-	consumerCh    chan RPC
+	consumerCh    chan raft.RPC
 	cancel        context.CancelFunc
 	// Used for our logging
-	logger hclog.Logger
+	logger    hclog.Logger
+	partition uint32
+}
+
+func (r *MuxTransport) NewPartition(partition uint32) Transport {
+	return &MuxTransport{raftTransport: r.raftTransport, partition: partition, consumerCh: r.consumerCh, cancel: r.cancel, logger: r.logger}
+}
+
+func (r *MuxTransport) Consumer() <-chan raft.RPC {
+	return r.consumerCh
+}
+
+func (r *MuxTransport) AppendEntriesPipeline(id raft.ServerID, target raft.ServerAddress) (raft.AppendPipeline, error) {
+	// TODO: fix pipeline to be able to pass partition
+	return r.raftTransport.AppendEntriesPipeline(id, target)
+}
+
+func (r *MuxTransport) AppendEntries(id raft.ServerID, target raft.ServerAddress, args *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) error {
+	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, r.partition))
+	return r.raftTransport.AppendEntries(id, target, args, resp)
+}
+
+func (r *MuxTransport) RequestVote(id raft.ServerID, target raft.ServerAddress, args *raft.RequestVoteRequest, resp *raft.RequestVoteResponse) error {
+	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, r.partition))
+	return r.raftTransport.RequestVote(id, target, args, resp)
+}
+
+func (r *MuxTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest, resp *raft.InstallSnapshotResponse, data io.Reader) error {
+	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, r.partition))
+	return r.raftTransport.InstallSnapshot(id, target, args, resp, data)
+}
+
+func (r *MuxTransport) EncodePeer(id raft.ServerID, addr raft.ServerAddress) []byte {
+	return r.raftTransport.EncodePeer(id, addr)
+}
+
+func (r *MuxTransport) DecodePeer(bytes []byte) raft.ServerAddress {
+	return r.raftTransport.DecodePeer(bytes)
+}
+
+func (r *MuxTransport) TimeoutNow(id raft.ServerID, target raft.ServerAddress, args *raft.TimeoutNowRequest, resp *raft.TimeoutNowResponse) error {
+	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, r.partition))
+	return r.raftTransport.TimeoutNow(id, target, args, resp)
 }
 
 func (r *MuxTransport) RaftTransport(_ uint32) raft.Transport {
 	return r.raftTransport
 }
 
-func (r *MuxTransport) Consumer() <-chan RPC {
-	return r.consumerCh
-}
-
 func (r *MuxTransport) LocalAddr() raft.ServerAddress {
 	return r.raftTransport.LocalAddr()
-}
-
-func (r *MuxTransport) AppendEntriesPipeline(id raft.ServerID, target raft.ServerAddress, partition uint64) (raft.AppendPipeline, error) {
-	// TODO: fix pipeline to be able to pass partition
-	return r.raftTransport.AppendEntriesPipeline(id, target)
-}
-
-func (r *MuxTransport) AppendEntries(id raft.ServerID, target raft.ServerAddress, args *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse, partition uint64) error {
-	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, partition))
-	return r.raftTransport.AppendEntries(id, target, args, resp)
-}
-
-func (r *MuxTransport) RequestVote(id raft.ServerID, target raft.ServerAddress, args *raft.RequestVoteRequest, resp *raft.RequestVoteResponse, partition uint64) error {
-	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, partition))
-	return r.raftTransport.RequestVote(id, target, args, resp)
-}
-
-func (r *MuxTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest, resp *raft.InstallSnapshotResponse, data io.Reader, partition uint64) error {
-	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, partition))
-	return r.raftTransport.InstallSnapshot(id, target, args, resp, data)
 }
 
 func (r *MuxTransport) SetHeartbeatHandler(cb func(rpc raft.RPC)) {
 	r.raftTransport.SetHeartbeatHandler(cb)
 }
 
-func (r *MuxTransport) TimeoutNow(id raft.ServerID, target raft.ServerAddress, args *raft.TimeoutNowRequest, resp *raft.TimeoutNowResponse, partition uint64) error {
-	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, partition))
-	return r.raftTransport.TimeoutNow(id, target, args, resp)
-}
-
-func (r *MuxTransport) RequestPreVote(id raft.ServerID, target raft.ServerAddress, args *raft.RequestPreVoteRequest, resp *raft.RequestPreVoteResponse, partition uint64) error {
-	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, partition))
+func (r *MuxTransport) RequestPreVote(id raft.ServerID, target raft.ServerAddress, args *raft.RequestPreVoteRequest, resp *raft.RequestPreVoteResponse) error {
+	args.RPCHeader.ID = []byte(fmt.Sprintf("%s%s%d", args.RPCHeader.ID, separator, r.partition))
 	return r.raftTransport.RequestPreVote(id, target, args, resp)
 }
 
@@ -115,11 +128,10 @@ func (r *MuxTransport) transportConsumer(ctx context.Context) {
 				cmd := rpc.Command.(*raft.InstallSnapshotRequest)
 				cmd.RPCHeader.ID = []byte(id[0])
 			}
-			newRPC := RPC{
-				Command:      rpc.Command,
-				partitionIdx: partition,
-				Reader:       rpc.Reader,
-				RespChan:     rpc.RespChan,
+			newRPC := raft.RPC{
+				Command:  rpc.Command,
+				Reader:   rpc.Reader,
+				RespChan: rpc.RespChan,
 			}
 			r.consumerCh <- newRPC
 		}
@@ -130,7 +142,7 @@ func (r *MuxTransport) transportConsumer(ctx context.Context) {
 func NewMuxTransport(transport TransportRaft) Transport {
 	ctx, cancel := context.WithCancel(context.Background())
 	//TODO: fix logger
-	raftTransport := MuxTransport{raftTransport: transport, consumerCh: make(chan RPC), cancel: cancel, logger: hclog.Default()}
+	raftTransport := MuxTransport{raftTransport: transport, consumerCh: make(chan raft.RPC), cancel: cancel, logger: hclog.Default()}
 	go raftTransport.transportConsumer(ctx)
 	return &raftTransport
 }

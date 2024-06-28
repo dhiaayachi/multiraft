@@ -43,7 +43,7 @@ func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStore
 	}
 
 	// Create the ZeroPartition, this is safe here as each server need to create a  MultiRaft instance anyway
-	r, err := multiRaft.createZeroPartition(conf, logsFactory, stableFactory, snapsFactory, trans.RaftTransport(0))
+	r, err := multiRaft.createZeroPartition(conf, logsFactory, stableFactory, snapsFactory, trans.NewPartition(ZeroPartition))
 	if err != nil {
 		return nil, err
 	}
@@ -133,7 +133,8 @@ func (r *MultiRaft) createZeroPartition(conf *raft.Config, logsFactory LogStoreF
 }
 
 func (r *MultiRaft) AddRaft(partition uint32) error {
-	newRaft, err := raft.NewRaft(r.conf, r.fsmFactory(), r.logsFactory(), r.stableFactory(), r.snapsFactory(), r.trans.RaftTransport(partition))
+	newTransport := r.trans.NewPartition(partition)
+	newRaft, err := raft.NewRaft(r.conf, r.fsmFactory(), r.logsFactory(), r.stableFactory(), r.snapsFactory(), newTransport)
 	if err != nil {
 		return err
 	}
@@ -141,4 +142,9 @@ func (r *MultiRaft) AddRaft(partition uint32) error {
 	newRafts := storePartition(*oldRafts, newRaft)
 	r.rafts.CompareAndSwap(oldRafts, &newRafts)
 	return nil
+}
+
+func (r *MultiRaft) BootstrapCluster(conf raft.Configuration) raft.Future {
+	rafts := *r.rafts.Load()
+	return rafts[ZeroPartition].BootstrapCluster(conf)
 }
