@@ -3,6 +3,7 @@ package transport
 import (
 	"context"
 	"github.com/dhiaayachi/multiraft/consts"
+	"github.com/dhiaayachi/multiraft/transport/requests"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"io"
@@ -17,36 +18,6 @@ type TransportRaft interface {
 	raft.Transport
 	raft.WithPreVote
 	raft.WithClose
-}
-
-//go:generate deep-copy -o RequestVoteRequest.deepcopy.go --pointer-receiver --type RequestVoteRequest .
-type RequestVoteRequest struct {
-	*raft.RequestVoteRequest
-}
-
-//go:generate deep-copy -o InstallSnapshotRequest.deepcopy.go --pointer-receiver --type InstallSnapshotRequest .
-type InstallSnapshotRequest struct {
-	*raft.InstallSnapshotRequest
-}
-
-//go:generate deep-copy -o AppendEntriesRequest.deepcopy.go --pointer-receiver --type AppendEntriesRequest .
-type AppendEntriesRequest struct {
-	*raft.AppendEntriesRequest
-}
-
-//go:generate deep-copy -o TimeoutNowRequest.deepcopy.go --pointer-receiver --type TimeoutNowRequest .
-type TimeoutNowRequest struct {
-	*raft.TimeoutNowRequest
-}
-
-//go:generate deep-copy -o RequestPreVoteRequest.deepcopy.go --pointer-receiver --type RequestPreVoteRequest .
-type RequestPreVoteRequest struct {
-	*raft.RequestPreVoteRequest
-}
-
-//go:generate deep-copy -o transport_header.deepcopy.go --pointer-receiver --type RaftRPCHeader .
-type RaftRPCHeader struct {
-	raft.RPCHeader
 }
 
 type MuxTransport struct {
@@ -78,7 +49,7 @@ func (r *MuxTransport) AppendEntriesPipeline(_ raft.ServerID, _ raft.ServerAddre
 }
 
 func (r *MuxTransport) AppendEntries(id raft.ServerID, target raft.ServerAddress, args *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) error {
-	argsW := &AppendEntriesRequest{args}
+	argsW := &requests.AppendEntriesRequest{AppendEntriesRequest: args}
 	argsCopy := argsW.DeepCopy()
 	if argsCopy.Meta == nil {
 		argsCopy.Meta = make(map[string]interface{})
@@ -89,7 +60,7 @@ func (r *MuxTransport) AppendEntries(id raft.ServerID, target raft.ServerAddress
 }
 
 func (r *MuxTransport) RequestVote(id raft.ServerID, target raft.ServerAddress, args *raft.RequestVoteRequest, resp *raft.RequestVoteResponse) error {
-	argsW := &RequestVoteRequest{args}
+	argsW := &requests.RequestVoteRequest{RequestVoteRequest: args}
 	argsCopy := argsW.DeepCopy()
 	if argsCopy.RequestVoteRequest.Meta == nil {
 		argsCopy.RequestVoteRequest.Meta = make(map[string]interface{})
@@ -100,7 +71,7 @@ func (r *MuxTransport) RequestVote(id raft.ServerID, target raft.ServerAddress, 
 }
 
 func (r *MuxTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest, resp *raft.InstallSnapshotResponse, data io.Reader) error {
-	argsW := &InstallSnapshotRequest{args}
+	argsW := &requests.InstallSnapshotRequest{InstallSnapshotRequest: args}
 	argsCopy := argsW.DeepCopy()
 	if argsCopy.Meta == nil {
 		argsCopy.Meta = make(map[string]interface{})
@@ -119,7 +90,7 @@ func (r *MuxTransport) DecodePeer(bytes []byte) raft.ServerAddress {
 }
 
 func (r *MuxTransport) TimeoutNow(id raft.ServerID, target raft.ServerAddress, args *raft.TimeoutNowRequest, resp *raft.TimeoutNowResponse) error {
-	argsW := &TimeoutNowRequest{args}
+	argsW := &requests.TimeoutNowRequest{TimeoutNowRequest: args}
 	argsCopy := argsW.DeepCopy()
 	if argsCopy.Meta == nil {
 		argsCopy.Meta = make(map[string]interface{})
@@ -142,7 +113,7 @@ func (r *MuxTransport) SetHeartbeatHandler(cb func(rpc raft.RPC)) {
 }
 
 func (r *MuxTransport) RequestPreVote(id raft.ServerID, target raft.ServerAddress, args *raft.RequestPreVoteRequest, resp *raft.RequestPreVoteResponse) error {
-	argsW := &RequestPreVoteRequest{args}
+	argsW := &requests.RequestPreVoteRequest{RequestPreVoteRequest: args}
 	argsCopy := argsW.DeepCopy()
 	if argsCopy.Meta == nil {
 		argsCopy.Meta = make(map[string]interface{})
