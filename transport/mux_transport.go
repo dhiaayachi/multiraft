@@ -165,9 +165,9 @@ func (r *MuxTransport) transportConsumer(ctx context.Context) {
 				RespChan: rpc.RespChan,
 			}
 
-			r.consumerChLock.Lock()
+			r.consumerChLock.RLock()
 			ch := r.consumerCh[p32]
-			r.consumerChLock.Unlock()
+			r.consumerChLock.RUnlock()
 			ch <- newRPC
 
 		}
