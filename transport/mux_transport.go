@@ -6,6 +6,7 @@ import (
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"io"
+	"sync"
 )
 
 const separator = "::"
@@ -18,26 +19,56 @@ type TransportRaft interface {
 	raft.WithClose
 }
 
-//go:generate deep-copy -o transport.deepcopy.go --pointer-receiver --type RaftRPCHeader .
+//go:generate deep-copy -o RequestVoteRequest.deepcopy.go --pointer-receiver --type RequestVoteRequest .
+type RequestVoteRequest struct {
+	*raft.RequestVoteRequest
+}
+
+//go:generate deep-copy -o InstallSnapshotRequest.deepcopy.go --pointer-receiver --type InstallSnapshotRequest .
+type InstallSnapshotRequest struct {
+	*raft.InstallSnapshotRequest
+}
+
+//go:generate deep-copy -o AppendEntriesRequest.deepcopy.go --pointer-receiver --type AppendEntriesRequest .
+type AppendEntriesRequest struct {
+	*raft.AppendEntriesRequest
+}
+
+//go:generate deep-copy -o TimeoutNowRequest.deepcopy.go --pointer-receiver --type TimeoutNowRequest .
+type TimeoutNowRequest struct {
+	*raft.TimeoutNowRequest
+}
+
+//go:generate deep-copy -o RequestPreVoteRequest.deepcopy.go --pointer-receiver --type RequestPreVoteRequest .
+type RequestPreVoteRequest struct {
+	*raft.RequestPreVoteRequest
+}
+
+//go:generate deep-copy -o transport_header.deepcopy.go --pointer-receiver --type RaftRPCHeader .
 type RaftRPCHeader struct {
 	raft.RPCHeader
 }
 
 type MuxTransport struct {
-	raftTransport TransportRaft
-	consumerCh    map[consts.PartitionType]chan raft.RPC
-	cancel        context.CancelFunc
+	raftTransport  TransportRaft
+	consumerCh     map[consts.PartitionType]chan raft.RPC
+	consumerChLock sync.RWMutex
+	cancel         context.CancelFunc
 	// Used for our logging
 	logger    hclog.Logger
 	partition consts.PartitionType
 }
 
 func (r *MuxTransport) NewPartition(partition consts.PartitionType) Transport {
+	r.consumerChLock.Lock()
+	defer r.consumerChLock.Unlock()
 	r.consumerCh[partition] = make(chan raft.RPC)
 	return &MuxTransport{raftTransport: r.raftTransport, partition: partition, consumerCh: r.consumerCh, cancel: r.cancel, logger: r.logger}
 }
 
 func (r *MuxTransport) Consumer() <-chan raft.RPC {
+	r.consumerChLock.RLock()
+	defer r.consumerChLock.RUnlock()
 	return r.consumerCh[r.partition]
 }
 
@@ -47,39 +78,36 @@ func (r *MuxTransport) AppendEntriesPipeline(_ raft.ServerID, _ raft.ServerAddre
 }
 
 func (r *MuxTransport) AppendEntries(id raft.ServerID, target raft.ServerAddress, args *raft.AppendEntriesRequest, resp *raft.AppendEntriesResponse) error {
-	hw := &RaftRPCHeader{RPCHeader: args.RPCHeader}
-	header := hw.DeepCopy()
-	if header.Meta == nil {
-		header.Meta = make(map[string]interface{})
+	argsW := &AppendEntriesRequest{args}
+	argsCopy := argsW.DeepCopy()
+	if argsCopy.Meta == nil {
+		argsCopy.Meta = make(map[string]interface{})
 	}
 
-	header.Meta[partitionKey] = r.partition
-	args.RPCHeader = header.RPCHeader
-	return r.raftTransport.AppendEntries(id, target, args, resp)
+	argsCopy.Meta[partitionKey] = r.partition
+	return r.raftTransport.AppendEntries(id, target, argsCopy.AppendEntriesRequest, resp)
 }
 
 func (r *MuxTransport) RequestVote(id raft.ServerID, target raft.ServerAddress, args *raft.RequestVoteRequest, resp *raft.RequestVoteResponse) error {
-	hw := &RaftRPCHeader{RPCHeader: args.RPCHeader}
-	header := hw.DeepCopy()
-	if header.Meta == nil {
-		header.Meta = make(map[string]interface{})
+	argsW := &RequestVoteRequest{args}
+	argsCopy := argsW.DeepCopy()
+	if argsCopy.RequestVoteRequest.Meta == nil {
+		argsCopy.RequestVoteRequest.Meta = make(map[string]interface{})
 	}
 
-	header.Meta[partitionKey] = r.partition
-	args.RPCHeader = header.RPCHeader
-	return r.raftTransport.RequestVote(id, target, args, resp)
+	argsCopy.RequestVoteRequest.Meta[partitionKey] = r.partition
+	return r.raftTransport.RequestVote(id, target, argsCopy.RequestVoteRequest, resp)
 }
 
 func (r *MuxTransport) InstallSnapshot(id raft.ServerID, target raft.ServerAddress, args *raft.InstallSnapshotRequest, resp *raft.InstallSnapshotResponse, data io.Reader) error {
-	hw := &RaftRPCHeader{RPCHeader: args.RPCHeader}
-	header := hw.DeepCopy()
-	if header.Meta == nil {
-		header.Meta = make(map[string]interface{})
+	argsW := &InstallSnapshotRequest{args}
+	argsCopy := argsW.DeepCopy()
+	if argsCopy.Meta == nil {
+		argsCopy.Meta = make(map[string]interface{})
 	}
 
-	header.Meta[partitionKey] = r.partition
-	args.RPCHeader = header.RPCHeader
-	return r.raftTransport.InstallSnapshot(id, target, args, resp, data)
+	argsCopy.Meta[partitionKey] = r.partition
+	return r.raftTransport.InstallSnapshot(id, target, argsCopy.InstallSnapshotRequest, resp, data)
 }
 
 func (r *MuxTransport) EncodePeer(id raft.ServerID, addr raft.ServerAddress) []byte {
@@ -91,15 +119,14 @@ func (r *MuxTransport) DecodePeer(bytes []byte) raft.ServerAddress {
 }
 
 func (r *MuxTransport) TimeoutNow(id raft.ServerID, target raft.ServerAddress, args *raft.TimeoutNowRequest, resp *raft.TimeoutNowResponse) error {
-	hw := &RaftRPCHeader{RPCHeader: args.RPCHeader}
-	header := hw.DeepCopy()
-	if header.Meta == nil {
-		header.Meta = make(map[string]interface{})
+	argsW := &TimeoutNowRequest{args}
+	argsCopy := argsW.DeepCopy()
+	if argsCopy.Meta == nil {
+		argsCopy.Meta = make(map[string]interface{})
 	}
 
-	header.Meta[partitionKey] = r.partition
-	args.RPCHeader = header.RPCHeader
-	return r.raftTransport.TimeoutNow(id, target, args, resp)
+	argsCopy.Meta[partitionKey] = r.partition
+	return r.raftTransport.TimeoutNow(id, target, argsCopy.TimeoutNowRequest, resp)
 }
 
 func (r *MuxTransport) RaftTransport(_ uint32) raft.Transport {
@@ -115,20 +142,20 @@ func (r *MuxTransport) SetHeartbeatHandler(cb func(rpc raft.RPC)) {
 }
 
 func (r *MuxTransport) RequestPreVote(id raft.ServerID, target raft.ServerAddress, args *raft.RequestPreVoteRequest, resp *raft.RequestPreVoteResponse) error {
-
-	hw := &RaftRPCHeader{RPCHeader: args.RPCHeader}
-	header := hw.DeepCopy()
-	if header.Meta == nil {
-		header.Meta = make(map[string]interface{})
+	argsW := &RequestPreVoteRequest{args}
+	argsCopy := argsW.DeepCopy()
+	if argsCopy.Meta == nil {
+		argsCopy.Meta = make(map[string]interface{})
 	}
 
-	header.Meta[partitionKey] = r.partition
-	args.RPCHeader = header.RPCHeader
-	return r.raftTransport.RequestPreVote(id, target, args, resp)
+	argsCopy.Meta[partitionKey] = r.partition
+	return r.raftTransport.RequestPreVote(id, target, argsCopy.RequestPreVoteRequest, resp)
 }
 
 func (r *MuxTransport) Close() error {
 	r.cancel()
+	r.consumerChLock.RLock()
+	defer r.consumerChLock.RUnlock()
 	for _, ch := range r.consumerCh {
 		close(ch)
 
@@ -167,7 +194,9 @@ func (r *MuxTransport) transportConsumer(ctx context.Context) {
 				RespChan: rpc.RespChan,
 			}
 
+			r.consumerChLock.Lock()
 			ch := r.consumerCh[p32]
+			r.consumerChLock.Unlock()
 			ch <- newRPC
 
 		}

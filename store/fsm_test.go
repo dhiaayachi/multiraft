@@ -45,10 +45,19 @@ func TestFsm_inServers(t *testing.T) {
 	}
 }
 
+// errorFuture is used to return a static error.
+type errorFuture struct {
+	err error
+}
+
+func (e errorFuture) Error() error {
+	return e.err
+}
+
 func TestApplyCreateRaft(t *testing.T) {
 	raftAdder := NewMockRaftAdder(t)
 	raftAdder.On("AddRaft", mock.Anything).Return(nil)
-	raftAdder.On("Leader", mock.Anything).Return(false)
+	raftAdder.On("BootstrapCluster", mock.Anything, mock.Anything).Return(errorFuture{nil})
 	fsm, err := NewFSM(raftAdder, hclog.Default(), "id33")
 	require.NoError(t, err)
 	encodedLog, err := encoding.EncodeMsgPack(PartitionConfiguration{PartitionID: "part44", Servers: []raft.Server{{ID: "id33"}, {ID: "server3"}}})

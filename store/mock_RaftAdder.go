@@ -52,24 +52,6 @@ func (_m *MockRaftAdder) BootstrapCluster(conf raft.Configuration, partition con
 	return r0
 }
 
-// Leader provides a mock function with given fields: id
-func (_m *MockRaftAdder) Leader(id consts.PartitionType) bool {
-	ret := _m.Called(id)
-
-	if len(ret) == 0 {
-		panic("no return value specified for Leader")
-	}
-
-	var r0 bool
-	if rf, ok := ret.Get(0).(func(consts.PartitionType) bool); ok {
-		r0 = rf(id)
-	} else {
-		r0 = ret.Get(0).(bool)
-	}
-
-	return r0
-}
-
 // NewMockRaftAdder creates a new instance of MockRaftAdder. It also registers a testing interface on the mock and a cleanup function to assert the mocks expectations.
 // The first argument is typically a *testing.T value.
 func NewMockRaftAdder(t interface {

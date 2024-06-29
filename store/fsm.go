@@ -12,7 +12,6 @@ import (
 //go:generate mockery --name RaftAdder --inpackage
 type RaftAdder interface {
 	AddRaft(id consts.PartitionType) error
-	Leader(id consts.PartitionType) bool
 	BootstrapCluster(conf raft.Configuration, partition consts.PartitionType) raft.Future
 }
 
