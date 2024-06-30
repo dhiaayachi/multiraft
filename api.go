@@ -78,7 +78,7 @@ func (r *MultiRaft) AddPartition(servers raft.Configuration, id consts.Partition
 	ZeroConfiguration := rafts[consts.ZeroPartition].GetConfiguration().Configuration()
 
 	// Check that the partition servers are part of the ZeroPartition
-	// ZeroPartition is supposed to have all the servers
+	// note that ZeroPartition is supposed to have all the servers
 	for _, server := range servers.Servers {
 		inConf := false
 		for _, confServer := range ZeroConfiguration.Servers {

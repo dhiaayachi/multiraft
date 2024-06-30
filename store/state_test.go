@@ -96,15 +96,15 @@ func TestStateSnapshot(t *testing.T) {
 	iter, err := state.db.Txn(false).Get(partitionTable, indexID)
 	require.NoError(t, err)
 	require.NotNil(t, iter)
-	var confs []*PartitionConfiguration
+	var configs []*PartitionConfiguration
 	for {
 		i := iter.Next()
 		if i == nil {
 			break
 		}
-		confs = append(confs, i.(*PartitionConfiguration))
+		configs = append(configs, i.(*PartitionConfiguration))
 	}
 	require.NoError(t, err)
-	require.Len(t, confs, 10)
+	require.Len(t, configs, 10)
 
 }

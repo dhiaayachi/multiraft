@@ -19,14 +19,14 @@ type cluster struct {
 	id              []raft.ServerID
 	trans           []*raft.InmemTransport
 	logger          hclog.Logger
-	longstopTimeout time.Duration
+	longStopTimeout time.Duration
 	startTime       time.Time
 	observationCh   chan raft.Observation
 }
 
 func (c *cluster) GetInState(s raft.RaftState, partition consts.PartitionType) []*raft.Raft {
 	c.logger.Info("starting stability test", "raft-state", s)
-	limitCh := time.After(c.longstopTimeout)
+	limitCh := time.After(c.longStopTimeout)
 	if len(c.mr) < 1 {
 		c.t.Fatalf("cluster empty")
 	}
@@ -51,6 +51,8 @@ func (c *cluster) GetInState(s raft.RaftState, partition consts.PartitionType) [
 	// observation a state has changed, recheck it and if it has changed,
 	// restart the timer.
 	pollStartTime := time.Now()
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 	for {
 		inState := c.pollState(s, partition)
 		inStateTime := time.Now()
@@ -67,8 +69,6 @@ func (c *cluster) GetInState(s raft.RaftState, partition consts.PartitionType) [
 			}
 		}
 
-		ctx, cancel := context.WithCancel(context.Background())
-		defer cancel()
 		eventCh := c.WaitEventChan(ctx, filter)
 		select {
 
@@ -140,7 +140,7 @@ func (c *cluster) WaitEventChan(ctx context.Context, filter raft.FilterFn) <-cha
 func createCluster(t *testing.T, num int) (*cluster, error) {
 
 	mrs := make([]*MultiRaft, 0)
-	addrs := make([]raft.ServerAddress, 0)
+	addresses := make([]raft.ServerAddress, 0)
 	ids := make([]raft.ServerID, 0)
 	transports := make([]*raft.InmemTransport, 0)
 	for i := 0; i < num; i++ {
@@ -167,11 +167,11 @@ func createCluster(t *testing.T, num int) (*cluster, error) {
 			return nil, err
 		}
 		mrs = append(mrs, multiRaft)
-		addrs = append(addrs, addr)
+		addresses = append(addresses, addr)
 		ids = append(ids, config.LocalID)
 		transports = append(transports, transportRaft)
 	}
-	return &cluster{t: t, mr: mrs, addr: addrs, id: ids, trans: transports, logger: hclog.Default(), startTime: time.Now(), longstopTimeout: 5 * time.Second}, nil
+	return &cluster{t: t, mr: mrs, addr: addresses, id: ids, trans: transports, logger: hclog.Default(), startTime: time.Now(), longStopTimeout: 5 * time.Second}, nil
 
 }
 
