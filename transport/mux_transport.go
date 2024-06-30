@@ -10,18 +10,17 @@ import (
 	"sync"
 )
 
-const separator = "::"
 const partitionKey = "partition"
 
-//go:generate mockery --name TransportRaft --inpackage
-type TransportRaft interface {
+//go:generate mockery --name RaftTransport --inpackage
+type RaftTransport interface {
 	raft.Transport
 	raft.WithPreVote
 	raft.WithClose
 }
 
 type MuxTransport struct {
-	raftTransport  TransportRaft
+	raftTransport  RaftTransport
 	consumerCh     map[consts.PartitionType]chan raft.RPC
 	consumerChLock sync.RWMutex
 	cancel         context.CancelFunc
@@ -175,7 +174,7 @@ func (r *MuxTransport) transportConsumer(ctx context.Context) {
 	}
 }
 
-func NewMuxTransport(transport TransportRaft) Transport {
+func NewMuxTransport(transport RaftTransport) Transport {
 	ctx, cancel := context.WithCancel(context.Background())
 	//TODO: fix logger
 	raftTransport := MuxTransport{raftTransport: transport, consumerCh: make(map[consts.PartitionType]chan raft.RPC), cancel: cancel, logger: hclog.Default(), partition: consts.ZeroPartition}

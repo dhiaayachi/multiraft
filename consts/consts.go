@@ -1,5 +1,5 @@
 package consts
 
-const ZeroPartition = "zero"
+const ZeroPartition = "™zero™"
 
 type PartitionType string

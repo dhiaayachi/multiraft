@@ -11,29 +11,29 @@ import (
 )
 
 func TestMuxTransportNew(t *testing.T) {
-	mockTransportRaft := NewMockTransportRaft(t)
+	mockTransportRaft := NewMockRaftTransport(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
 	trans := NewMuxTransport(mockTransportRaft)
-	defer trans.Close()
+	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 
 }
 
 func TestMuxTransportLocalAddr(t *testing.T) {
-	mockTransportRaft := NewMockTransportRaft(t)
+	mockTransportRaft := NewMockRaftTransport(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("LocalAddr").Return(raft.ServerAddress("node-addr-1"))
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
 	trans := NewMuxTransport(mockTransportRaft)
-	defer trans.Close()
+	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	require.Equal(t, trans.LocalAddr(), raft.ServerAddress("node-addr-1"))
 
 }
 
 func TestMuxTransportAppendEntries(t *testing.T) {
-	mockTransportRaft := NewMockTransportRaft(t)
+	mockTransportRaft := NewMockRaftTransport(t)
 	mockTransportRaft.On("AppendEntries", raft.ServerID("node1"),
 		raft.ServerAddress("node1-addr"),
 		&raft.AppendEntriesRequest{
@@ -42,7 +42,7 @@ func TestMuxTransportAppendEntries(t *testing.T) {
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
 	trans := NewMuxTransport(mockTransportRaft).NewPartition("part1")
-	defer trans.Close()
+	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	require.NoError(t, trans.AppendEntries("node1", "node1-addr",
 		&raft.AppendEntriesRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.AppendEntriesResponse{}))
@@ -50,7 +50,7 @@ func TestMuxTransportAppendEntries(t *testing.T) {
 }
 
 func TestMuxTransportRequestVote(t *testing.T) {
-	mockTransportRaft := NewMockTransportRaft(t)
+	mockTransportRaft := NewMockRaftTransport(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
 	mockTransportRaft.On("RequestVote", raft.ServerID("node1"), raft.ServerAddress("node1-addr"),
@@ -58,14 +58,14 @@ func TestMuxTransportRequestVote(t *testing.T) {
 			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part22")}},
 		}, mock.Anything).Return(nil)
 	trans := NewMuxTransport(mockTransportRaft).NewPartition("part22")
-	defer trans.Close()
+	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	require.NoError(t, trans.RequestVote("node1", "node1-addr", &raft.RequestVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.RequestVoteResponse{}))
 	mockTransportRaft.AssertNumberOfCalls(t, "RequestVote", 1)
 }
 
 func TestMuxTransportInstallSnapshot(t *testing.T) {
-	mockTransportRaft := NewMockTransportRaft(t)
+	mockTransportRaft := NewMockRaftTransport(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
 	mockTransportRaft.On("InstallSnapshot", raft.ServerID("node1"), raft.ServerAddress("node1-addr"),
@@ -73,28 +73,28 @@ func TestMuxTransportInstallSnapshot(t *testing.T) {
 			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part33")}},
 		}, mock.Anything, mock.Anything).Return(nil)
 	trans := NewMuxTransport(mockTransportRaft).NewPartition("part33")
-	defer trans.Close()
+	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	require.NoError(t, trans.InstallSnapshot("node1", "node1-addr", &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.InstallSnapshotResponse{}, &bytes.Buffer{}))
 	mockTransportRaft.AssertNumberOfCalls(t, "InstallSnapshot", 1)
 }
 
 func TestMuxTransportTimeoutNow(t *testing.T) {
-	mockTransportRaft := NewMockTransportRaft(t)
+	mockTransportRaft := NewMockRaftTransport(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
 	mockTransportRaft.On("TimeoutNow", raft.ServerID("node1"), raft.ServerAddress("node1-addr"), &raft.TimeoutNowRequest{
 		RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part32")}},
 	}, mock.Anything).Return(nil)
 	trans := NewMuxTransport(mockTransportRaft).NewPartition("part32")
-	defer trans.Close()
+	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	require.NoError(t, trans.TimeoutNow("node1", "node1-addr", &raft.TimeoutNowRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.TimeoutNowResponse{}))
 	mockTransportRaft.AssertNumberOfCalls(t, "TimeoutNow", 1)
 }
 
 func TestMuxTransportRequestPreVote(t *testing.T) {
-	mockTransportRaft := NewMockTransportRaft(t)
+	mockTransportRaft := NewMockRaftTransport(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
 	mockTransportRaft.On("RequestPreVote", raft.ServerID("node1"), raft.ServerAddress("node1-addr"),
@@ -102,19 +102,19 @@ func TestMuxTransportRequestPreVote(t *testing.T) {
 			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part21")}},
 		}, mock.Anything).Return(nil)
 	trans := NewMuxTransport(mockTransportRaft).NewPartition("part21")
-	defer trans.Close()
+	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	require.NoError(t, trans.RequestPreVote("node1", "node1-addr", &raft.RequestPreVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.RequestPreVoteResponse{}))
 	mockTransportRaft.AssertNumberOfCalls(t, "RequestPreVote", 1)
 }
 
 func TestMuxTransportSetHeartbeatHandler(t *testing.T) {
-	mockTransportRaft := NewMockTransportRaft(t)
+	mockTransportRaft := NewMockRaftTransport(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
 	mockTransportRaft.On("SetHeartbeatHandler", mock.Anything).Return(nil)
 	trans := NewMuxTransport(mockTransportRaft)
-	defer trans.Close()
+	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	trans.SetHeartbeatHandler(func(rpc raft.RPC) {})
 	mockTransportRaft.AssertNumberOfCalls(t, "SetHeartbeatHandler", 1)
@@ -122,11 +122,11 @@ func TestMuxTransportSetHeartbeatHandler(t *testing.T) {
 
 func TestMuxTransportConsumer(t *testing.T) {
 	ch := make(chan raft.RPC)
-	mockTransportRaft := NewMockTransportRaft(t)
+	mockTransportRaft := NewMockRaftTransport(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(ch)
 	trans := NewMuxTransport(mockTransportRaft).NewPartition("part5")
-	defer trans.Close()
+	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	mch := trans.Consumer()
 	ch <- raft.RPC{Command: &raft.RequestPreVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part5")}}}}
