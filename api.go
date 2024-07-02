@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/raft"
 	"os"
 	"sync/atomic"
+	"time"
 )
 
 //go:generate mockery --name MultiRaft --inpackage
@@ -172,4 +173,11 @@ func (r *MultiRaft) AddRaft(partition consts.PartitionType) error {
 func (r *MultiRaft) BootstrapCluster(conf raft.Configuration, partition consts.PartitionType) raft.Future {
 	rafts := *r.rafts.Load()
 	return rafts[partition].BootstrapCluster(conf)
+}
+
+func (r *MultiRaft) Apply(cmd []byte, timeout time.Duration, partition consts.PartitionType) raft.ApplyFuture {
+	panic("implement me")
+}
+func (r *MultiRaft) ApplyLog(log raft.Log, timeout time.Duration, partition consts.PartitionType) raft.ApplyFuture {
+	panic("implement me")
 }
