@@ -163,7 +163,7 @@ func createCluster(t *testing.T, num int) (*cluster, error) {
 			func() raft.SnapshotStore {
 				return raft.NewDiscardSnapshotStore()
 			},
-			transport.NewMuxTransport(transportRaft),
+			transport.NewMuxTransport(transportRaft, hclog.Default()),
 		)
 		if err != nil {
 			return nil, err

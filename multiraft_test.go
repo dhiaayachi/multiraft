@@ -3,6 +3,7 @@ package multiraft
 import (
 	"github.com/dhiaayachi/multiraft/consts"
 	"github.com/dhiaayachi/multiraft/transport"
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"github.com/stretchr/testify/require"
 	"testing"
@@ -28,7 +29,7 @@ func TestCreateMultiRaft(t *testing.T) {
 		func() raft.SnapshotStore {
 			return raft.NewDiscardSnapshotStore()
 		},
-		transport.NewMuxTransport(transportRaft),
+		transport.NewMuxTransport(transportRaft, hclog.Default()),
 	)
 	require.NoError(t, err)
 	require.NotNil(t, mr)

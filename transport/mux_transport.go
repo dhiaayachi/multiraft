@@ -185,10 +185,9 @@ func (r *MuxTransport) SetHeartbeatHandler(cb func(rpc raft.RPC)) {
 	r.raftTransport.SetHeartbeatHandler(cb)
 }
 
-func NewMuxTransport(transport RaftTransport) *MuxTransport {
+func NewMuxTransport(transport RaftTransport, logger hclog.Logger) *MuxTransport {
 	ctx, cancel := context.WithCancel(context.Background())
-	//TODO: fix logger
-	muxTransport := MuxTransport{raftTransport: transport, consumerCh: make(map[consts.PartitionType]chan raft.RPC), cancel: cancel, logger: hclog.Default()}
+	muxTransport := MuxTransport{raftTransport: transport, consumerCh: make(map[consts.PartitionType]chan raft.RPC), cancel: cancel, logger: logger}
 	zeroPart := muxTransport.NewPartition(consts.ZeroPartition)
 	muxTransport.zeroPart = zeroPart
 	go muxTransport.transportConsumer(ctx)

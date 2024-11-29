@@ -3,6 +3,7 @@ package transport
 import (
 	"bytes"
 	"github.com/dhiaayachi/multiraft/consts"
+	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
@@ -14,7 +15,7 @@ func TestMuxTransportNew(t *testing.T) {
 	mockTransportRaft := NewMockRaftTransport(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
-	trans := NewMuxTransport(mockTransportRaft)
+	trans := NewMuxTransport(mockTransportRaft, hclog.Default())
 	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 
@@ -25,7 +26,7 @@ func TestMuxTransportLocalAddr(t *testing.T) {
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("LocalAddr").Return(raft.ServerAddress("node-addr-1"))
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
-	trans := NewMuxTransport(mockTransportRaft)
+	trans := NewMuxTransport(mockTransportRaft, hclog.Default())
 	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	require.Equal(t, trans.LocalAddr(), raft.ServerAddress("node-addr-1"))
@@ -41,7 +42,7 @@ func TestMuxTransportAppendEntries(t *testing.T) {
 		}, mock.Anything).Return(nil)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
-	trans := NewMuxTransport(mockTransportRaft).NewPartition("part1")
+	trans := NewMuxTransport(mockTransportRaft, hclog.Default()).NewPartition("part1")
 	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	require.NoError(t, trans.AppendEntries("node1", "node1-addr",
@@ -57,7 +58,7 @@ func TestMuxTransportRequestVote(t *testing.T) {
 		&raft.RequestVoteRequest{
 			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part22")}},
 		}, mock.Anything).Return(nil)
-	trans := NewMuxTransport(mockTransportRaft).NewPartition("part22")
+	trans := NewMuxTransport(mockTransportRaft, hclog.Default()).NewPartition("part22")
 	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	require.NoError(t, trans.RequestVote("node1", "node1-addr", &raft.RequestVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.RequestVoteResponse{}))
@@ -72,7 +73,7 @@ func TestMuxTransportInstallSnapshot(t *testing.T) {
 		&raft.InstallSnapshotRequest{
 			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part33")}},
 		}, mock.Anything, mock.Anything).Return(nil)
-	trans := NewMuxTransport(mockTransportRaft).NewPartition("part33")
+	trans := NewMuxTransport(mockTransportRaft, hclog.Default()).NewPartition("part33")
 	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	require.NoError(t, trans.InstallSnapshot("node1", "node1-addr", &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.InstallSnapshotResponse{}, &bytes.Buffer{}))
@@ -86,7 +87,7 @@ func TestMuxTransportTimeoutNow(t *testing.T) {
 	mockTransportRaft.On("TimeoutNow", raft.ServerID("node1"), raft.ServerAddress("node1-addr"), &raft.TimeoutNowRequest{
 		RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part32")}},
 	}, mock.Anything).Return(nil)
-	trans := NewMuxTransport(mockTransportRaft).NewPartition("part32")
+	trans := NewMuxTransport(mockTransportRaft, hclog.Default()).NewPartition("part32")
 	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	require.NoError(t, trans.TimeoutNow("node1", "node1-addr", &raft.TimeoutNowRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.TimeoutNowResponse{}))
@@ -101,7 +102,7 @@ func TestMuxTransportRequestPreVote(t *testing.T) {
 		&raft.RequestPreVoteRequest{
 			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part21")}},
 		}, mock.Anything).Return(nil)
-	trans := NewMuxTransport(mockTransportRaft).NewPartition("part21")
+	trans := NewMuxTransport(mockTransportRaft, hclog.Default()).NewPartition("part21")
 	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	require.NoError(t, trans.RequestPreVote("node1", "node1-addr", &raft.RequestPreVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}, &raft.RequestPreVoteResponse{}))
@@ -113,7 +114,7 @@ func TestMuxTransportSetHeartbeatHandler(t *testing.T) {
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
 	mockTransportRaft.On("SetHeartbeatHandler", mock.Anything).Return(nil)
-	trans := NewMuxTransport(mockTransportRaft)
+	trans := NewMuxTransport(mockTransportRaft, hclog.Default())
 	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	trans.SetHeartbeatHandler(func(rpc raft.RPC) {})
@@ -125,7 +126,7 @@ func TestMuxTransportConsumer(t *testing.T) {
 	mockTransportRaft := NewMockRaftTransport(t)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(ch)
-	trans := NewMuxTransport(mockTransportRaft).NewPartition("part5")
+	trans := NewMuxTransport(mockTransportRaft, hclog.Default()).NewPartition("part5")
 	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	mch := trans.Consumer()
@@ -225,7 +226,7 @@ func TestWithInMemTransport(t *testing.T) {
 	addr[1], rTrans[1] = raft.NewInmemTransport("")
 
 	for i := 0; i < 2; i++ {
-		mTrans[i] = NewMuxTransport(rTrans[i]).NewPartition("part9")
+		mTrans[i] = NewMuxTransport(rTrans[i], hclog.Default()).NewPartition("part9")
 	}
 
 	ch1 := mTrans[1].Consumer()
