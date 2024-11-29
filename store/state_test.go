@@ -63,6 +63,16 @@ func applyPartition(t *testing.T, state *PartitionState, id consts.PartitionType
 	require.Nil(t, ret)
 }
 
+func TestApplyPartitionInvalidMsgPack(t *testing.T) {
+	// Create a state
+	s, err := NewPartitionState()
+	require.NoError(t, err)
+	state := s.(*PartitionState)
+	pack := "invalid msg"
+	ret := state.Apply(&raft.Log{Data: []byte(pack)})
+	require.Error(t, ret.(error))
+}
+
 func TestStateSnapshot(t *testing.T) {
 	s, err := NewPartitionState()
 	state := s.(*PartitionState)
@@ -106,5 +116,51 @@ func TestStateSnapshot(t *testing.T) {
 	}
 	require.NoError(t, err)
 	require.Len(t, configs, 10)
+
+}
+
+func TestStateSnapshotSinkErrorOnClose(t *testing.T) {
+	s, err := NewPartitionState()
+	state := s.(*PartitionState)
+	require.Nil(t, err)
+	require.NotNil(t, state)
+	for i := 0; i < 10; i++ {
+		applyPartition(t, state, consts.PartitionType(fmt.Sprintf("part%d", i)))
+	}
+
+	fsmSnapshot, err := state.Snapshot()
+
+	require.NoError(t, err)
+
+	sink := mocks.NewSnapshotSink(t)
+	var b []byte
+	sink.On("Write", mock.Anything).Return(0, nil).Run(func(args mock.Arguments) {
+		b = append(b, args.Get(0).([]byte)...)
+
+	})
+	sink.On("Close").Return(fmt.Errorf("error close sink"))
+	err = fsmSnapshot.Persist(sink)
+	require.Errorf(t, err, "error close sink")
+
+}
+
+func TestStateSnapshotSinkErrorOnWrite(t *testing.T) {
+	s, err := NewPartitionState()
+	state := s.(*PartitionState)
+	require.Nil(t, err)
+	require.NotNil(t, state)
+	for i := 0; i < 10; i++ {
+		applyPartition(t, state, consts.PartitionType(fmt.Sprintf("part%d", i)))
+	}
+
+	fsmSnapshot, err := state.Snapshot()
+
+	require.NoError(t, err)
+
+	sink := mocks.NewSnapshotSink(t)
+	sink.On("Write", mock.Anything).Return(0, fmt.Errorf("error sink"))
+	sink.On("Cancel").Return(nil)
+	err = fsmSnapshot.Persist(sink)
+	require.Errorf(t, err, "error sink")
 
 }

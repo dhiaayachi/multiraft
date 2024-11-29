@@ -1,7 +1,6 @@
 package transport
 
 import (
-	"github.com/dhiaayachi/multiraft/consts"
 	"github.com/hashicorp/raft"
 	"io"
 	"time"
@@ -21,7 +20,6 @@ type Transport interface {
 	raft.Transport
 	raft.WithPreVote
 	raft.WithClose
-	NewPartition(partition consts.PartitionType) Transport
 }
 
 // AppendFuture is used to return information about a pipelined AppendEntries request.

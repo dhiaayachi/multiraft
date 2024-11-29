@@ -10,8 +10,8 @@ import (
 )
 
 //go:generate mockery --name RaftAdder --inpackage
-type RaftAdder interface {
-	AddRaft(id consts.PartitionType) error
+type PartitionAdder interface {
+	NewPartition(id consts.PartitionType) error
 	BootstrapCluster(conf raft.Configuration, partition consts.PartitionType) raft.Future
 }
 
@@ -21,18 +21,18 @@ type PartitionConfiguration struct {
 }
 
 type Fsm struct {
-	fsm       raft.FSM
-	logger    hclog.Logger
-	id        raft.ServerID
-	raftAdder RaftAdder
+	fsm            raft.FSM
+	logger         hclog.Logger
+	id             raft.ServerID
+	partitionAdder PartitionAdder
 }
 
-func NewFSM(r RaftAdder, logger hclog.Logger, id raft.ServerID) (*Fsm, error) {
+func NewFSM(r PartitionAdder, logger hclog.Logger, id raft.ServerID) (*Fsm, error) {
 	state, err := NewPartitionState()
 	if err != nil {
 		return nil, err
 	}
-	return &Fsm{fsm: state, raftAdder: r, logger: logger, id: id}, nil
+	return &Fsm{fsm: state, partitionAdder: r, logger: logger, id: id}, nil
 }
 
 func (f *Fsm) Apply(log *raft.Log) interface{} {
@@ -44,7 +44,7 @@ func (f *Fsm) Apply(log *raft.Log) interface{} {
 	}
 	if f.inServers(conf.Servers) {
 		f.logger.Info("adding new raft partition", "part-id", conf.PartitionID, "servers", conf.Servers)
-		err := f.raftAdder.AddRaft(conf.PartitionID)
+		err := f.partitionAdder.NewPartition(conf.PartitionID)
 		if err != nil {
 			f.logger.Error("failed to add raft server", "error", err)
 			return fmt.Errorf("failed to add raft server: %w", err)
@@ -52,7 +52,7 @@ func (f *Fsm) Apply(log *raft.Log) interface{} {
 
 		if f.id == conf.Servers[0].ID {
 			f.logger.Info("bootstrapping new raft partition", "part-id", conf.PartitionID, "servers", conf.Servers)
-			future := f.raftAdder.BootstrapCluster(raft.Configuration{Servers: conf.Servers}, conf.PartitionID)
+			future := f.partitionAdder.BootstrapCluster(raft.Configuration{Servers: conf.Servers}, conf.PartitionID)
 			if err := future.Error(); err != nil {
 				return err
 			}

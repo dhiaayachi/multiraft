@@ -61,17 +61,16 @@ func TestCreateClusterAndPartition(t *testing.T) {
 	err = waitForLeader(c, consts.ZeroPartition)
 	require.NoError(t, err)
 
-	rafts := *c.mr[0].rafts.Load()
+	rafts := c.mr[0].rafts
 	leader, _ := rafts[consts.ZeroPartition].LeaderWithID()
 	require.NotEmpty(t, leader)
 
-	err = c.mr[0].AddPartition(configuration, "default")
-
-	require.NoError(t, err)
+	f = c.mr[0].AddPartition(configuration, "default")
+	require.NoError(t, f.Error())
 
 	err = waitForLeader(c, "default")
 	require.NoError(t, err)
-	rafts = *c.mr[0].rafts.Load()
+	rafts = c.mr[0].rafts
 	leader, _ = rafts["default"].LeaderWithID()
 	require.NotEmpty(t, leader)
 
@@ -105,7 +104,7 @@ func TestCreateClusterAndPartitionInSomeNodes(t *testing.T) {
 	err = waitForLeader(c, consts.ZeroPartition)
 	require.NoError(t, err)
 
-	rafts := *c.mr[0].rafts.Load()
+	rafts := c.mr[0].rafts
 	leader, _ := rafts[consts.ZeroPartition].LeaderWithID()
 	require.NotEmpty(t, leader)
 
@@ -118,13 +117,13 @@ func TestCreateClusterAndPartitionInSomeNodes(t *testing.T) {
 			Address: c.addr[i],
 		})
 	}
-	err = c.mr[0].AddPartition(partConfig, "default")
+	f = c.mr[0].AddPartition(partConfig, "default")
 
-	require.NoError(t, err)
+	require.NoError(t, f.Error())
 
 	err = waitForLeader(c, "default")
 	require.NoError(t, err)
-	rafts = *c.mr[0].rafts.Load()
+	rafts = c.mr[0].rafts
 	leader, _ = rafts["default"].LeaderWithID()
 	require.NotEmpty(t, leader)
 

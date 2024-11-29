@@ -8,35 +8,57 @@ import (
 	"github.com/dhiaayachi/multiraft/transport"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
-	"os"
-	"sync/atomic"
+	"sync"
 	"time"
 )
 
-//go:generate mockery --name MultiRaft --inpackage
+// MultiRaft represents a multi-partition Raft cluster.
+// It manages multiple Raft instances, each corresponding to a partition.
 type MultiRaft struct {
-	rafts         atomic.Pointer[map[consts.PartitionType]*raft.Raft]
-	conf          *raft.Config
-	fsmFactory    FsmFactory
-	logsFactory   LogStoreFactory
+	// Mapping of partition IDs to Raft instances
+	rafts map[consts.PartitionType]*raft.Raft
+
+	raftsLock sync.RWMutex
+
+	// Raft configuration
+	conf *raft.Config
+
+	// Factory for creating FSMs
+	fsmFactory FsmFactory
+
+	// Factory for creating log stores
+	logsFactory LogStoreFactory
+
+	// Factory for creating stable stores
 	stableFactory StableStoreFactory
-	snapsFactory  SnapshotStoreFactory
-	trans         transport.Transport
-	logger        hclog.Logger
+
+	// Factory for creating snapshot stores
+	snapsFactory SnapshotStoreFactory
+
+	// Transport layer for communication
+	trans *transport.MuxTransport
+
+	// Logger instance
+	logger hclog.Logger
 }
 
-func (r *MultiRaft) Leader(id consts.PartitionType) bool {
-	rafts := *r.rafts.Load()
-	_, serverID := rafts[id].LeaderWithID()
-	return serverID == r.conf.LocalID
+// Leader checks if the local node is the leader of the specified partition.
+// Returns true if the local node is the leader.
+func (mr *MultiRaft) Leader(id consts.PartitionType) bool {
+	mr.raftsLock.RLock()
+	defer mr.raftsLock.RUnlock()
+	_, serverID := mr.rafts[id].LeaderWithID()
+	return serverID == mr.conf.LocalID
 }
 
-func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans transport.Transport) (*MultiRaft, error) {
+// NewMultiRaft creates a new MultiRaft instance.
+// It initializes the ZeroPartition and sets up the necessary factories and configuration.
+func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans *transport.MuxTransport) (*MultiRaft, error) {
 
-	// get logger from the config or create one
+	// Get logger from the config or create a new one
 	logger := getOrCreateLogger(conf)
 
-	//Create MultiRaft data struct and store the factories that will be used to create future raft instances.
+	// Initialize MultiRaft instance
 	multiRaft := &MultiRaft{
 		conf:          conf,
 		fsmFactory:    fsmFactory,
@@ -47,39 +69,42 @@ func NewMultiRaft(conf *raft.Config, fsmFactory FsmFactory, logsFactory LogStore
 		logger:        logger,
 	}
 
-	// Create the ZeroPartition, this is safe here as each server need to create a  MultiRaft instance anyway
+	// Create the ZeroPartition
 	r, err := multiRaft.createZeroPartition(conf, logsFactory, stableFactory, snapsFactory, trans.NewPartition(consts.ZeroPartition))
 	if err != nil {
 		return nil, err
 	}
 
-	// Store the raft instance at index zero, this need to be at index 0
-	// 0 index is reserved for internal usage and can't be used by user.
+	// Store the ZeroPartition Raft instance
+	multiRaft.raftsLock.Lock()
+	defer multiRaft.raftsLock.Unlock()
 	rafts := make(map[consts.PartitionType]*raft.Raft)
 	rafts[consts.ZeroPartition] = r
-	multiRaft.rafts.Store(&rafts)
+	multiRaft.rafts = rafts
 
 	return multiRaft, nil
 }
 
-func (r *MultiRaft) AddPartition(servers raft.Configuration, id consts.PartitionType) error {
+// AddPartition adds a new partition to the cluster.
+// It validates the servers and replicates the partition configuration via the ZeroPartition.
+func (mr *MultiRaft) AddPartition(servers raft.Configuration, id consts.PartitionType) raft.Future {
 
-	// index start at 0, 0 is reserved for the "ZeroPartition"
-
+	// Ensure the partition ID is not reserved
 	if id == consts.ZeroPartition {
-		return fmt.Errorf("partition %s is reserved", id)
+		return ErrorFuture{fmt.Errorf("partition %s is reserved", id)}
 	}
 
 	partServers := make([]raft.Server, 0)
 
-	rafts := *r.rafts.Load()
-	if len(rafts) == 0 {
-		return fmt.Errorf("multiraft is not initialized")
-	}
-	ZeroConfiguration := rafts[consts.ZeroPartition].GetConfiguration().Configuration()
+	mr.raftsLock.RLock()
+	defer mr.raftsLock.RUnlock()
 
-	// Check that the partition servers are part of the ZeroPartition
-	// note that ZeroPartition is supposed to have all the servers
+	if len(mr.rafts) == 0 {
+		return ErrorFuture{fmt.Errorf("multiraft is not initialized")}
+	}
+	ZeroConfiguration := mr.rafts[consts.ZeroPartition].GetConfiguration().Configuration()
+
+	// Validate servers are part of the ZeroPartition
 	for _, server := range servers.Servers {
 		inConf := false
 		for _, confServer := range ZeroConfiguration.Servers {
@@ -90,94 +115,93 @@ func (r *MultiRaft) AddPartition(servers raft.Configuration, id consts.Partition
 			}
 		}
 		if !inConf {
-			return fmt.Errorf("server not part of the cluster %s", server)
+			return ErrorFuture{fmt.Errorf("server not part of the cluster %s", server)}
 		}
 	}
 
-	// Create the partition configuration and store it in the ZeroPartition
-	// This should trigger the replication of the configuration to all the servers
+	// Create and replicate the partition configuration
 	partConf := store.PartitionConfiguration{Servers: partServers, PartitionID: id}
 	pack, err := encoding.EncodeMsgPack(partConf)
 	if err != nil {
-		return err
+		mr.raftsLock.RUnlock()
+		return ErrorFuture{err}
 	}
-	future := rafts[consts.ZeroPartition].ApplyLog(raft.Log{Data: pack.Bytes()}, r.conf.HeartbeatTimeout)
+	future := mr.rafts[consts.ZeroPartition].ApplyLog(raft.Log{Data: pack.Bytes()}, mr.conf.HeartbeatTimeout)
+	// This need to be unlocked before
 
-	return future.Error()
+	return future
 }
 
-type FsmFactory = func() raft.FSM
-type LogStoreFactory = func() raft.LogStore
-type StableStoreFactory = func() raft.StableStore
-type SnapshotStoreFactory = func() raft.SnapshotStore
-
-func getOrCreateLogger(conf *raft.Config) hclog.Logger {
-	if conf.Logger != nil {
-		return conf.Logger
-	}
-	if conf.LogOutput == nil {
-		conf.LogOutput = os.Stderr
-	}
-
-	return hclog.New(&hclog.LoggerOptions{
-		Name:   "raft",
-		Level:  hclog.LevelFromString(conf.LogLevel),
-		Output: conf.LogOutput,
-	})
-}
-
-func storePartition(rafts map[consts.PartitionType]*raft.Raft, id consts.PartitionType, r *raft.Raft) map[consts.PartitionType]*raft.Raft {
-	raftsCopy := make(map[consts.PartitionType]*raft.Raft)
-	for k, v := range rafts {
-		raftsCopy[k] = v
-	}
-	raftsCopy[id] = r
-	return raftsCopy
-}
-
-func (r *MultiRaft) createZeroPartition(conf *raft.Config, logsFactory LogStoreFactory, stableFactory StableStoreFactory, snapsFactory SnapshotStoreFactory, trans raft.Transport) (*raft.Raft, error) {
-
-	if r.conf.Logger != nil {
-		r.conf.Logger = r.conf.Logger.Named(fmt.Sprintf("raft-%d-%s", 0, r.conf.LocalID))
+// NewPartition initializes a new Raft instance for a given partition.
+func (mr *MultiRaft) NewPartition(partition consts.PartitionType) error {
+	newTransport := mr.trans.NewPartition(partition)
+	if mr.conf.Logger != nil {
+		mr.conf.Logger = mr.conf.Logger.Named(fmt.Sprintf("raft-%s-%s", partition, mr.conf.LocalID))
 	} else {
-		r.conf.Logger = hclog.Default().Named(fmt.Sprintf("raft-%d-%s", 0, r.conf.LocalID))
+		mr.conf.Logger = hclog.Default().Named(fmt.Sprintf("raft-%s-%s", partition, mr.conf.LocalID))
 	}
-	zeroFsm, _ := store.NewFSM(r, r.conf.Logger.With("id", conf.LocalID), conf.LocalID)
-	return raft.NewRaft(conf, zeroFsm, logsFactory(), stableFactory(), snapsFactory(), trans)
-}
-
-func (r *MultiRaft) AddRaft(partition consts.PartitionType) error {
-	newTransport := r.trans.NewPartition(partition)
-	if r.conf.Logger != nil {
-		r.conf.Logger = r.conf.Logger.Named(fmt.Sprintf("raft-%s-%s", partition, r.conf.LocalID))
-	} else {
-		r.conf.Logger = hclog.Default().Named(fmt.Sprintf("raft-%s-%s", partition, r.conf.LocalID))
-	}
-	newRaft, err := raft.NewRaft(r.conf, r.fsmFactory(), r.logsFactory(), r.stableFactory(), r.snapsFactory(), newTransport)
+	newRaft, err := raft.NewRaft(mr.conf, mr.fsmFactory(), mr.logsFactory(), mr.stableFactory(), mr.snapsFactory(), newTransport)
 	if err != nil {
 		return err
 	}
-	oldRafts := *r.rafts.Load()
-	_, ok := oldRafts[partition]
+	mr.raftsLock.Lock()
+	defer mr.raftsLock.Unlock()
+
+	_, ok := mr.rafts[partition]
 	if ok {
 		return fmt.Errorf("partition %s already exist", partition)
 	}
-	newRafts := storePartition(oldRafts, partition, newRaft)
-	r.rafts.Store(&newRafts)
-	//if !swapped {
-	//	r.logger.Warn("not swapping raft store")
-	//}
+	mr.rafts[partition] = newRaft
 	return nil
 }
 
-func (r *MultiRaft) BootstrapCluster(conf raft.Configuration, partition consts.PartitionType) raft.Future {
-	rafts := *r.rafts.Load()
-	return rafts[partition].BootstrapCluster(conf)
+// BootstrapCluster initializes a new Raft cluster for a specified partition.
+func (mr *MultiRaft) BootstrapCluster(conf raft.Configuration, partition consts.PartitionType) raft.Future {
+	mr.raftsLock.RLock()
+	defer mr.raftsLock.RUnlock()
+	r, ok := mr.rafts[partition]
+	if !ok {
+		return &ErrorFuture{fmt.Errorf("partition %s do not exist", partition)}
+	}
+	return r.BootstrapCluster(conf)
 }
 
-func (r *MultiRaft) Apply(cmd []byte, timeout time.Duration, partition consts.PartitionType) raft.ApplyFuture {
-	panic("implement me")
+// Apply applies a command to a specified partition.
+// This method is a placeholder and is not yet implemented.
+func (mr *MultiRaft) Apply(cmd []byte, timeout time.Duration, partition consts.PartitionType) raft.ApplyFuture {
+	mr.raftsLock.RLock()
+	defer mr.raftsLock.RUnlock()
+	r, ok := mr.rafts[partition]
+	if !ok {
+		return &ErrorFuture{fmt.Errorf("partition %s do not exist", partition)}
+	}
+	return r.Apply(cmd, timeout)
 }
-func (r *MultiRaft) ApplyLog(log raft.Log, timeout time.Duration, partition consts.PartitionType) raft.ApplyFuture {
-	panic("implement me")
+
+// ApplyLog applies a log entry to a specified partition.
+// This method is a placeholder and is not yet implemented.
+func (mr *MultiRaft) ApplyLog(log raft.Log, timeout time.Duration, partition consts.PartitionType) raft.ApplyFuture {
+	mr.raftsLock.RLock()
+	defer mr.raftsLock.RUnlock()
+	r, ok := mr.rafts[partition]
+	if !ok {
+		return &ErrorFuture{fmt.Errorf("partition %s do not exist", partition)}
+	}
+	return r.ApplyLog(log, timeout)
+}
+
+type ErrorFuture struct {
+	err error
+}
+
+func (f ErrorFuture) Index() uint64 {
+	return 0
+}
+
+func (f ErrorFuture) Response() interface{} {
+	return f.err
+}
+
+func (f ErrorFuture) Error() error {
+	return f.err
 }

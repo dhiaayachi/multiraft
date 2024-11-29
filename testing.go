@@ -99,12 +99,14 @@ func (c *cluster) pollState(s raft.RaftState, partition consts.PartitionType) []
 	i := 0
 	rafts := make([]*raft.Raft, 0)
 	for _, mr := range c.mr {
-		rs := *mr.rafts.Load()
+		mr.raftsLock.RLock()
+		rs := mr.rafts
 		r, ok := rs[partition]
 		if ok {
 			rafts = append(rafts, r)
 		}
 		i++
+		mr.raftsLock.RUnlock()
 	}
 
 	for _, r := range rafts {
