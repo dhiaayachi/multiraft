@@ -21,7 +21,7 @@ func (o *TimeoutNowRequest) DeepCopy() *TimeoutNowRequest {
 			copy(cp.TimeoutNowRequest.RPCHeader.Addr, o.TimeoutNowRequest.RPCHeader.Addr)
 		}
 		if o.TimeoutNowRequest.RPCHeader.Meta != nil {
-			cp.TimeoutNowRequest.RPCHeader.Meta = make(map[string]interface{}, len(o.TimeoutNowRequest.RPCHeader.Meta))
+			cp.TimeoutNowRequest.RPCHeader.Meta = make(map[string]any, len(o.TimeoutNowRequest.RPCHeader.Meta))
 			for k5, v5 := range o.TimeoutNowRequest.RPCHeader.Meta {
 				cp.TimeoutNowRequest.RPCHeader.Meta[k5] = v5
 			}

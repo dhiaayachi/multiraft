@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/dhiaayachi/multiraft/consts"
+	"github.com/dhiaayachi/multiraft/partition"
 	"github.com/dhiaayachi/multiraft/transport"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
@@ -24,7 +24,7 @@ type cluster struct {
 	observationCh   chan raft.Observation
 }
 
-func (c *cluster) GetInState(s raft.RaftState, partition consts.PartitionType) []*raft.Raft {
+func (c *cluster) GetInState(s raft.RaftState, partition partition.Typ) []*raft.Raft {
 	c.logger.Info("starting stability test", "raft-state", s)
 	limitCh := time.After(c.longStopTimeout)
 	if len(c.mr) < 1 {
@@ -93,7 +93,7 @@ func (c *cluster) GetInState(s raft.RaftState, partition consts.PartitionType) [
 // pollState takes a snapshot of the state of the cluster. This might not be
 // stable, so use GetInState() to apply some additional checks when waiting
 // for the cluster to achieve a particular state.
-func (c *cluster) pollState(s raft.RaftState, partition consts.PartitionType) []*raft.Raft {
+func (c *cluster) pollState(s raft.RaftState, partition partition.Typ) []*raft.Raft {
 	in := make([]*raft.Raft, 0, 1)
 
 	i := 0
@@ -177,7 +177,7 @@ func createCluster(t *testing.T, num int) (*cluster, error) {
 
 }
 
-func waitForLeader(c *cluster, partition consts.PartitionType) error {
+func waitForLeader(c *cluster, partition partition.Typ) error {
 	count := 0
 	for count < 100 {
 		r := c.GetInState(raft.Leader, partition)

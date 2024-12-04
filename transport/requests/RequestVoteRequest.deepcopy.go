@@ -21,7 +21,7 @@ func (o *RequestVoteRequest) DeepCopy() *RequestVoteRequest {
 			copy(cp.RequestVoteRequest.RPCHeader.Addr, o.RequestVoteRequest.RPCHeader.Addr)
 		}
 		if o.RequestVoteRequest.RPCHeader.Meta != nil {
-			cp.RequestVoteRequest.RPCHeader.Meta = make(map[string]interface{}, len(o.RequestVoteRequest.RPCHeader.Meta))
+			cp.RequestVoteRequest.RPCHeader.Meta = make(map[string]any, len(o.RequestVoteRequest.RPCHeader.Meta))
 			for k5, v5 := range o.RequestVoteRequest.RPCHeader.Meta {
 				cp.RequestVoteRequest.RPCHeader.Meta[k5] = v5
 			}

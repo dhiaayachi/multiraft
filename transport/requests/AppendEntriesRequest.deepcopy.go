@@ -21,7 +21,7 @@ func (o *AppendEntriesRequest) DeepCopy() *AppendEntriesRequest {
 			copy(cp.AppendEntriesRequest.RPCHeader.Addr, o.AppendEntriesRequest.RPCHeader.Addr)
 		}
 		if o.AppendEntriesRequest.RPCHeader.Meta != nil {
-			cp.AppendEntriesRequest.RPCHeader.Meta = make(map[string]interface{}, len(o.AppendEntriesRequest.RPCHeader.Meta))
+			cp.AppendEntriesRequest.RPCHeader.Meta = make(map[string]any, len(o.AppendEntriesRequest.RPCHeader.Meta))
 			for k5, v5 := range o.AppendEntriesRequest.RPCHeader.Meta {
 				cp.AppendEntriesRequest.RPCHeader.Meta[k5] = v5
 			}

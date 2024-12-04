@@ -2,7 +2,7 @@ package transport
 
 import (
 	"context"
-	"github.com/dhiaayachi/multiraft/consts"
+	"github.com/dhiaayachi/multiraft/partition"
 	"github.com/dhiaayachi/multiraft/transport/requests"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
@@ -21,7 +21,7 @@ type RaftTransport interface {
 
 type MuxTransport struct {
 	raftTransport  RaftTransport
-	consumerCh     map[consts.PartitionType]chan raft.RPC
+	consumerCh     map[partition.Typ]chan raft.RPC
 	consumerChLock sync.RWMutex
 	cancel         context.CancelFunc
 	// Used for our logging
@@ -34,10 +34,10 @@ type PartitionTransport struct {
 	consumerCh    chan raft.RPC
 	cancel        context.CancelFunc
 	logger        hclog.Logger
-	partition     consts.PartitionType
+	partition     partition.Typ
 }
 
-func (r *MuxTransport) NewPartition(partition consts.PartitionType) Transport {
+func (r *MuxTransport) NewPartition(partition partition.Typ) Transport {
 	r.consumerChLock.Lock()
 	defer r.consumerChLock.Unlock()
 	r.consumerCh[partition] = make(chan raft.RPC)
@@ -146,13 +146,13 @@ func (r *MuxTransport) transportConsumer(ctx context.Context) {
 				r.logger.Error("not able to parse meta for partition")
 				continue
 			}
-			partition, ok := header.Meta[partitionKey]
+			part, ok := header.Meta[partitionKey]
 
 			if !ok {
 				r.logger.Error("not able to parse meta for partition key")
 				continue
 			}
-			partitionId, ok := partition.(consts.PartitionType)
+			partitionId, ok := part.(partition.Typ)
 			if !ok {
 				r.logger.Error("not able to parse meta for partition key (type)")
 				continue
@@ -187,8 +187,8 @@ func (r *MuxTransport) SetHeartbeatHandler(cb func(rpc raft.RPC)) {
 
 func NewMuxTransport(transport RaftTransport, logger hclog.Logger) *MuxTransport {
 	ctx, cancel := context.WithCancel(context.Background())
-	muxTransport := MuxTransport{raftTransport: transport, consumerCh: make(map[consts.PartitionType]chan raft.RPC), cancel: cancel, logger: logger}
-	zeroPart := muxTransport.NewPartition(consts.ZeroPartition)
+	muxTransport := MuxTransport{raftTransport: transport, consumerCh: make(map[partition.Typ]chan raft.RPC), cancel: cancel, logger: logger}
+	zeroPart := muxTransport.NewPartition(partition.Zero)
 	muxTransport.zeroPart = zeroPart
 	go muxTransport.transportConsumer(ctx)
 	return &muxTransport

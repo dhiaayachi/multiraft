@@ -2,7 +2,7 @@ package transport
 
 import (
 	"bytes"
-	"github.com/dhiaayachi/multiraft/consts"
+	"github.com/dhiaayachi/multiraft/partition"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"github.com/stretchr/testify/mock"
@@ -38,7 +38,7 @@ func TestMuxTransportAppendEntries(t *testing.T) {
 	mockTransportRaft.On("AppendEntries", raft.ServerID("node1"),
 		raft.ServerAddress("node1-addr"),
 		&raft.AppendEntriesRequest{
-			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part1")}},
+			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: partition.Typ("part1")}},
 		}, mock.Anything).Return(nil)
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
@@ -56,7 +56,7 @@ func TestMuxTransportRequestVote(t *testing.T) {
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
 	mockTransportRaft.On("RequestVote", raft.ServerID("node1"), raft.ServerAddress("node1-addr"),
 		&raft.RequestVoteRequest{
-			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part22")}},
+			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: partition.Typ("part22")}},
 		}, mock.Anything).Return(nil)
 	trans := NewMuxTransport(mockTransportRaft, hclog.Default()).NewPartition("part22")
 	defer func() { _ = trans.Close() }()
@@ -71,7 +71,7 @@ func TestMuxTransportInstallSnapshot(t *testing.T) {
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
 	mockTransportRaft.On("InstallSnapshot", raft.ServerID("node1"), raft.ServerAddress("node1-addr"),
 		&raft.InstallSnapshotRequest{
-			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part33")}},
+			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: partition.Typ("part33")}},
 		}, mock.Anything, mock.Anything).Return(nil)
 	trans := NewMuxTransport(mockTransportRaft, hclog.Default()).NewPartition("part33")
 	defer func() { _ = trans.Close() }()
@@ -85,7 +85,7 @@ func TestMuxTransportTimeoutNow(t *testing.T) {
 	mockTransportRaft.On("Close").Return(nil)
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
 	mockTransportRaft.On("TimeoutNow", raft.ServerID("node1"), raft.ServerAddress("node1-addr"), &raft.TimeoutNowRequest{
-		RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part32")}},
+		RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: partition.Typ("part32")}},
 	}, mock.Anything).Return(nil)
 	trans := NewMuxTransport(mockTransportRaft, hclog.Default()).NewPartition("part32")
 	defer func() { _ = trans.Close() }()
@@ -100,7 +100,7 @@ func TestMuxTransportRequestPreVote(t *testing.T) {
 	mockTransportRaft.On("Consumer").Maybe().Return(nil)
 	mockTransportRaft.On("RequestPreVote", raft.ServerID("node1"), raft.ServerAddress("node1-addr"),
 		&raft.RequestPreVoteRequest{
-			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part21")}},
+			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: partition.Typ("part21")}},
 		}, mock.Anything).Return(nil)
 	trans := NewMuxTransport(mockTransportRaft, hclog.Default()).NewPartition("part21")
 	defer func() { _ = trans.Close() }()
@@ -130,62 +130,62 @@ func TestMuxTransportConsumer(t *testing.T) {
 	defer func() { _ = trans.Close() }()
 	require.NotNil(t, trans)
 	mch := trans.Consumer()
-	ch <- raft.RPC{Command: &raft.RequestPreVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part5")}}}}
+	ch <- raft.RPC{Command: &raft.RequestPreVoteRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: partition.Typ("part5")}}}}
 	rpc := <-mch
 
 	require.NotNil(t, rpc)
 	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
-	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], consts.PartitionType("part5"))
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], partition.Typ("part5"))
 
 	ch <- raft.RPC{
 		Command: &raft.AppendEntriesRequest{
 			RPCHeader: raft.RPCHeader{
 				ID:   []byte("node1"),
-				Meta: map[string]interface{}{partitionKey: consts.PartitionType("part5")}},
+				Meta: map[string]interface{}{partitionKey: partition.Typ("part5")}},
 		},
 	}
 	rpc = <-mch
 
 	require.NotNil(t, rpc)
 	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
-	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], consts.PartitionType("part5"))
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], partition.Typ("part5"))
 
 	ch <- raft.RPC{
 		Command: &raft.RequestVoteRequest{
 			RPCHeader: raft.RPCHeader{
 				ID:   []byte("node1"),
-				Meta: map[string]interface{}{partitionKey: consts.PartitionType("part5")}},
+				Meta: map[string]interface{}{partitionKey: partition.Typ("part5")}},
 		},
 	}
 	rpc = <-mch
 
 	require.NotNil(t, rpc)
 	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
-	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], consts.PartitionType("part5"))
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], partition.Typ("part5"))
 
 	ch <- raft.RPC{
 		Command: &raft.TimeoutNowRequest{
-			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: consts.PartitionType("part5")}},
+			RPCHeader: raft.RPCHeader{ID: []byte("node1"), Meta: map[string]interface{}{partitionKey: partition.Typ("part5")}},
 		},
 	}
 	rpc = <-mch
 
 	require.NotNil(t, rpc)
 	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
-	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], consts.PartitionType("part5"))
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], partition.Typ("part5"))
 
 	ch <- raft.RPC{
 		Command: &raft.InstallSnapshotRequest{
 			RPCHeader: raft.RPCHeader{
 				ID:   []byte("node1"),
-				Meta: map[string]interface{}{partitionKey: consts.PartitionType("part5")}},
+				Meta: map[string]interface{}{partitionKey: partition.Typ("part5")}},
 		},
 	}
 	rpc = <-mch
 
 	require.NotNil(t, rpc)
 	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().ID, []byte("node1"))
-	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], consts.PartitionType("part5"))
+	require.Equal(t, rpc.Command.(raft.WithRPCHeader).GetRPCHeader().Meta[partitionKey], partition.Typ("part5"))
 
 	// no partition
 	ch <- raft.RPC{Command: &raft.InstallSnapshotRequest{RPCHeader: raft.RPCHeader{ID: []byte("node1")}}}
@@ -241,5 +241,5 @@ func TestWithInMemTransport(t *testing.T) {
 
 	require.NoError(t, mTrans[0].RequestVote("id0", addr[1], &raft.RequestVoteRequest{}, &raft.RequestVoteResponse{}))
 	require.NotNil(t, rsp)
-	require.Equal(t, consts.PartitionType("part9"), rsp.Command.(*raft.RequestVoteRequest).GetRPCHeader().Meta[partitionKey])
+	require.Equal(t, partition.Typ("part9"), rsp.Command.(*raft.RequestVoteRequest).GetRPCHeader().Meta[partitionKey])
 }

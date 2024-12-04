@@ -3,8 +3,8 @@ package store
 import (
 	"bytes"
 	"fmt"
-	"github.com/dhiaayachi/multiraft/consts"
 	"github.com/dhiaayachi/multiraft/encoding"
+	"github.com/dhiaayachi/multiraft/partition"
 	"github.com/dhiaayachi/multiraft/store/mocks"
 	"github.com/hashicorp/raft"
 	"github.com/stretchr/testify/mock"
@@ -34,7 +34,7 @@ func TestCreateStateAndApply(t *testing.T) {
 	c := iter.Next().(*PartitionConfiguration)
 	require.NotNil(t, c)
 
-	require.Equal(t, c.PartitionID, consts.PartitionType("part1"))
+	require.Equal(t, c.PartitionID, partition.Typ("part1"))
 
 	require.Nil(t, iter.Next())
 
@@ -45,16 +45,16 @@ func TestCreateStateAndApply(t *testing.T) {
 
 	c = iter.Next().(*PartitionConfiguration)
 	require.NotNil(t, c)
-	require.Equal(t, c.PartitionID, consts.PartitionType("part1"))
+	require.Equal(t, c.PartitionID, partition.Typ("part1"))
 
 	c = iter.Next().(*PartitionConfiguration)
 	require.NotNil(t, c)
-	require.Equal(t, c.PartitionID, consts.PartitionType("part2"))
+	require.Equal(t, c.PartitionID, partition.Typ("part2"))
 
 	require.Nil(t, iter.Next())
 }
 
-func applyPartition(t *testing.T, state *PartitionState, id consts.PartitionType) {
+func applyPartition(t *testing.T, state *PartitionState, id partition.Typ) {
 	pack, err := encoding.EncodeMsgPack(PartitionConfiguration{
 		PartitionID: id,
 	})
@@ -79,7 +79,7 @@ func TestStateSnapshot(t *testing.T) {
 	require.Nil(t, err)
 	require.NotNil(t, state)
 	for i := 0; i < 10; i++ {
-		applyPartition(t, state, consts.PartitionType(fmt.Sprintf("part%d", i)))
+		applyPartition(t, state, partition.Typ(fmt.Sprintf("part%d", i)))
 	}
 
 	fsmSnapshot, err := state.Snapshot()
@@ -125,7 +125,7 @@ func TestStateSnapshotSinkErrorOnClose(t *testing.T) {
 	require.Nil(t, err)
 	require.NotNil(t, state)
 	for i := 0; i < 10; i++ {
-		applyPartition(t, state, consts.PartitionType(fmt.Sprintf("part%d", i)))
+		applyPartition(t, state, partition.Typ(fmt.Sprintf("part%d", i)))
 	}
 
 	fsmSnapshot, err := state.Snapshot()
@@ -150,7 +150,7 @@ func TestStateSnapshotSinkErrorOnWrite(t *testing.T) {
 	require.Nil(t, err)
 	require.NotNil(t, state)
 	for i := 0; i < 10; i++ {
-		applyPartition(t, state, consts.PartitionType(fmt.Sprintf("part%d", i)))
+		applyPartition(t, state, partition.Typ(fmt.Sprintf("part%d", i)))
 	}
 
 	fsmSnapshot, err := state.Snapshot()

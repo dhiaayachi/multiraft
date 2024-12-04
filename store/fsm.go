@@ -2,21 +2,21 @@ package store
 
 import (
 	"fmt"
-	"github.com/dhiaayachi/multiraft/consts"
 	"github.com/dhiaayachi/multiraft/encoding"
+	"github.com/dhiaayachi/multiraft/partition"
 	"github.com/hashicorp/go-hclog"
 	"github.com/hashicorp/raft"
 	"io"
 )
 
 //go:generate mockery --name RaftAdder --inpackage
-type PartitionAdder interface {
-	NewPartition(id consts.PartitionType) error
-	BootstrapCluster(conf raft.Configuration, partition consts.PartitionType) raft.Future
+type RaftAdder interface {
+	NewPartition(id partition.Typ) error
+	BootstrapCluster(conf raft.Configuration, partition partition.Typ) raft.Future
 }
 
 type PartitionConfiguration struct {
-	PartitionID consts.PartitionType
+	PartitionID partition.Typ
 	Servers     []raft.Server
 }
 
@@ -24,10 +24,10 @@ type Fsm struct {
 	fsm            raft.FSM
 	logger         hclog.Logger
 	id             raft.ServerID
-	partitionAdder PartitionAdder
+	partitionAdder RaftAdder
 }
 
-func NewFSM(r PartitionAdder, logger hclog.Logger, id raft.ServerID) (*Fsm, error) {
+func NewFSM(r RaftAdder, logger hclog.Logger, id raft.ServerID) (*Fsm, error) {
 	state, err := NewPartitionState()
 	if err != nil {
 		return nil, err

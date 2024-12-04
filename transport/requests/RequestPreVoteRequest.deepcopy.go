@@ -21,7 +21,7 @@ func (o *RequestPreVoteRequest) DeepCopy() *RequestPreVoteRequest {
 			copy(cp.RequestPreVoteRequest.RPCHeader.Addr, o.RequestPreVoteRequest.RPCHeader.Addr)
 		}
 		if o.RequestPreVoteRequest.RPCHeader.Meta != nil {
-			cp.RequestPreVoteRequest.RPCHeader.Meta = make(map[string]interface{}, len(o.RequestPreVoteRequest.RPCHeader.Meta))
+			cp.RequestPreVoteRequest.RPCHeader.Meta = make(map[string]any, len(o.RequestPreVoteRequest.RPCHeader.Meta))
 			for k5, v5 := range o.RequestPreVoteRequest.RPCHeader.Meta {
 				cp.RequestPreVoteRequest.RPCHeader.Meta[k5] = v5
 			}

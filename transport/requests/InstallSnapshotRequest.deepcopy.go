@@ -21,7 +21,7 @@ func (o *InstallSnapshotRequest) DeepCopy() *InstallSnapshotRequest {
 			copy(cp.InstallSnapshotRequest.RPCHeader.Addr, o.InstallSnapshotRequest.RPCHeader.Addr)
 		}
 		if o.InstallSnapshotRequest.RPCHeader.Meta != nil {
-			cp.InstallSnapshotRequest.RPCHeader.Meta = make(map[string]interface{}, len(o.InstallSnapshotRequest.RPCHeader.Meta))
+			cp.InstallSnapshotRequest.RPCHeader.Meta = make(map[string]any, len(o.InstallSnapshotRequest.RPCHeader.Meta))
 			for k5, v5 := range o.InstallSnapshotRequest.RPCHeader.Meta {
 				cp.InstallSnapshotRequest.RPCHeader.Meta[k5] = v5
 			}
