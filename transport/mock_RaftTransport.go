@@ -5,7 +5,7 @@ package transport
 import (
 	io "io"
 
-	raft "github.com/hashicorp/raft"
+	raft "github.com/dhiaayachi/raft"
 	mock "github.com/stretchr/testify/mock"
 )
 

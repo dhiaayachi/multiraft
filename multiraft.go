@@ -3,8 +3,8 @@ package multiraft
 import (
 	"fmt"
 	"github.com/dhiaayachi/multiraft/store"
+	"github.com/dhiaayachi/raft"
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/raft"
 	"os"
 )
 

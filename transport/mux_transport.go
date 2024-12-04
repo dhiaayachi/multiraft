@@ -4,8 +4,8 @@ import (
 	"context"
 	"github.com/dhiaayachi/multiraft/partition"
 	"github.com/dhiaayachi/multiraft/transport/requests"
+	"github.com/dhiaayachi/raft"
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/raft"
 	"io"
 	"sync"
 )

@@ -2,9 +2,9 @@ package store
 
 import (
 	"github.com/dhiaayachi/multiraft/encoding"
+	"github.com/dhiaayachi/raft"
 	"github.com/hashicorp/go-memdb"
 	"github.com/hashicorp/go-msgpack/v2/codec"
-	"github.com/hashicorp/raft"
 	"io"
 )
 

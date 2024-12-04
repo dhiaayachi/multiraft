@@ -1,6 +1,6 @@
 package requests
 
-import "github.com/hashicorp/raft"
+import "github.com/dhiaayachi/raft"
 
 //go:generate deep-copy -o RequestVoteRequest.deepcopy.go --pointer-receiver --type RequestVoteRequest .
 type RequestVoteRequest struct {

@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"github.com/dhiaayachi/multiraft/partition"
 	"github.com/dhiaayachi/multiraft/transport"
+	"github.com/dhiaayachi/raft"
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/raft"
 	"testing"
 	"time"
 )

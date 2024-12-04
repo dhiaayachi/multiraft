@@ -3,8 +3,8 @@ package multiraft
 import (
 	"github.com/dhiaayachi/multiraft/partition"
 	"github.com/dhiaayachi/multiraft/transport"
+	"github.com/dhiaayachi/raft"
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/raft"
 	"github.com/stretchr/testify/require"
 	"testing"
 	"time"

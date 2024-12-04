@@ -3,8 +3,8 @@ package transport
 import (
 	"bytes"
 	"github.com/dhiaayachi/multiraft/partition"
+	"github.com/dhiaayachi/raft"
 	"github.com/hashicorp/go-hclog"
-	"github.com/hashicorp/raft"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"testing"

@@ -6,7 +6,7 @@ import (
 	"github.com/dhiaayachi/multiraft/encoding"
 	"github.com/dhiaayachi/multiraft/partition"
 	"github.com/dhiaayachi/multiraft/store/mocks"
-	"github.com/hashicorp/raft"
+	"github.com/dhiaayachi/raft"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"io"

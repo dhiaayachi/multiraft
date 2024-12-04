@@ -3,7 +3,7 @@
 package requests
 
 import (
-	"github.com/hashicorp/raft"
+	"github.com/dhiaayachi/raft"
 )
 
 // DeepCopy generates a deep copy of *RequestPreVoteRequest
