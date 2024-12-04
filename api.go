@@ -252,6 +252,42 @@ func (mr *MultiRaft) State(partition partition.Typ) raft.RaftState {
 	return mr.rafts[partition].State()
 }
 
+func (mr *MultiRaft) AddVoter(id raft.ServerID, address raft.ServerAddress, prevIndex uint64, timeout time.Duration) raft.IndexFuture {
+	mr.raftsLock.RLock()
+	defer mr.raftsLock.RUnlock()
+	if _, ok := mr.rafts[partition.Zero]; !ok {
+		return &ErrorFuture{fmt.Errorf("partition %s do not exist", partition.Zero)}
+	}
+	return mr.rafts[partition.Zero].AddVoter(id, address, prevIndex, timeout)
+}
+
+func (mr *MultiRaft) AddVoterToPartition(id raft.ServerID, address raft.ServerAddress, prevIndex uint64, timeout time.Duration, part partition.Typ) raft.IndexFuture {
+	mr.raftsLock.RLock()
+	defer mr.raftsLock.RUnlock()
+	if part == partition.Zero {
+		return mr.AddVoter(id, address, prevIndex, timeout)
+	}
+
+	if _, ok := mr.rafts[partition.Zero]; !ok {
+		return &ErrorFuture{fmt.Errorf("partition %s do not exist", partition.Zero)}
+	}
+	config := mr.rafts[partition.Zero].GetConfiguration()
+	inConf := false
+	for _, c := range config.Configuration().Servers {
+		if c.ID == id {
+			inConf = true
+			break
+		}
+	}
+	if !inConf {
+		return &ErrorFuture{fmt.Errorf("Voter need to be in zero partition (%s) before added to any other partition", partition.Zero)}
+	}
+	if _, ok := mr.rafts[part]; !ok {
+		return &ErrorFuture{fmt.Errorf("partition %s do not exist", partition.Zero)}
+	}
+	return mr.rafts[part].AddVoter(id, address, prevIndex, timeout)
+}
+
 type ErrorFuture struct {
 	err error
 }

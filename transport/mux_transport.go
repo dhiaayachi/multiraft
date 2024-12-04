@@ -129,6 +129,7 @@ func (r *PartitionTransport) RequestPreVote(id raft.ServerID, target raft.Server
 }
 
 func (r *PartitionTransport) Close() error {
+	r.cancel()
 	close(r.consumerCh)
 	return r.raftTransport.Close()
 }
@@ -167,7 +168,6 @@ func (r *MuxTransport) transportConsumer(ctx context.Context) {
 			ch := r.consumerCh[partitionId]
 			r.consumerChLock.RUnlock()
 			ch <- newRPC
-
 		}
 
 	}

@@ -517,3 +517,275 @@ func TestAddPartitionErrors(t *testing.T) {
 	future = mr.AddPartition(configuration, "test_partition")
 	require.Error(t, future.Error())
 }
+
+func TestAddVoter(t *testing.T) {
+	// Test scenarios with different cluster configurations and edge cases
+	testCases := []struct {
+		name             string
+		numNodes         int
+		addZeroPartition bool
+		voterToAdd       struct {
+			id      string
+			address string
+		}
+		expectedError bool
+	}{
+		{
+			name:             "Successful add to single node cluster",
+			numNodes:         1,
+			addZeroPartition: true,
+			voterToAdd: struct {
+				id      string
+				address string
+			}{
+				id:      "new_voter_single_node",
+				address: "new_voter_addr_single_node",
+			},
+			expectedError: false,
+		},
+		{
+			name:             "Successful add to multi-node cluster",
+			numNodes:         5,
+			addZeroPartition: true,
+			voterToAdd: struct {
+				id      string
+				address string
+			}{
+				id:      "new_voter_multi_node",
+				address: "new_voter_addr_multi_node",
+			},
+			expectedError: false,
+		},
+		{
+			name:             "Add voter to uninitialized cluster",
+			numNodes:         3,
+			addZeroPartition: false,
+			voterToAdd: struct {
+				id      string
+				address string
+			}{
+				id:      "new_voter_uninitialized",
+				address: "new_voter_addr_uninitialized",
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create cluster
+			c, err := createCluster(t, tc.numNodes)
+			require.NoError(t, err)
+
+			// Connect nodes
+			for i := 0; i < tc.numNodes; i++ {
+				for j := 0; j < tc.numNodes; j++ {
+					if i == j {
+						continue
+					}
+					c.trans[i].Connect(c.addr[j], c.trans[j])
+				}
+			}
+
+			// Prepare configuration
+			configuration := raft.Configuration{}
+			for i := 0; i < tc.numNodes; i++ {
+				configuration.Servers = append(configuration.Servers, raft.Server{
+					ID:      c.id[i],
+					Address: c.addr[i],
+				})
+			}
+
+			// Bootstrap cluster if required
+			if tc.addZeroPartition {
+				f := c.mr[0].BootstrapCluster(configuration, partition.Zero)
+				require.NoError(t, f.Error())
+
+				err = waitForLeader(c, partition.Zero)
+				require.NoError(t, err)
+			}
+
+			// Add voter
+			indexFuture := c.mr[0].AddVoter(raft.ServerID(tc.voterToAdd.id), raft.ServerAddress(tc.voterToAdd.address), 0, time.Second)
+
+			if tc.expectedError {
+				require.Error(t, indexFuture.Error())
+			} else {
+				require.NoError(t, indexFuture.Error())
+			}
+		})
+	}
+}
+
+func TestAddVoterToPartition(t *testing.T) {
+	testCases := []struct {
+		name             string
+		numNodes         int
+		addZeroPartition bool
+		addTestPartition bool
+		voterToAdd       struct {
+			id              string
+			address         string
+			inZeroPartition bool
+			targetPartition string
+		}
+		expectedError bool
+	}{
+		{
+			name:             "Successful add to zero partition",
+			numNodes:         3,
+			addZeroPartition: true,
+			addTestPartition: true,
+			voterToAdd: struct {
+				id              string
+				address         string
+				inZeroPartition bool
+				targetPartition string
+			}{
+				id:              "voter1",
+				address:         "voter1_addr",
+				inZeroPartition: true,
+				targetPartition: partition.Zero,
+			},
+			expectedError: false,
+		},
+		{
+			name:             "Successful add to test partition",
+			numNodes:         3,
+			addZeroPartition: true,
+			addTestPartition: true,
+			voterToAdd: struct {
+				id              string
+				address         string
+				inZeroPartition bool
+				targetPartition string
+			}{
+				id:              "voter2",
+				address:         "voter2_addr",
+				inZeroPartition: true,
+				targetPartition: "test_partition",
+			},
+			expectedError: false,
+		},
+		{
+			name:             "Add voter not in zero partition to another partition",
+			numNodes:         3,
+			addZeroPartition: true,
+			addTestPartition: true,
+			voterToAdd: struct {
+				id              string
+				address         string
+				inZeroPartition bool
+				targetPartition string
+			}{
+				id:              "voter3",
+				address:         "voter3_addr",
+				inZeroPartition: false,
+				targetPartition: "test_partition",
+			},
+			expectedError: true,
+		},
+		{
+			name:             "Add voter to non-existent partition",
+			numNodes:         3,
+			addZeroPartition: true,
+			addTestPartition: true,
+			voterToAdd: struct {
+				id              string
+				address         string
+				inZeroPartition bool
+				targetPartition string
+			}{
+				id:              "voter4",
+				address:         "voter4_addr",
+				inZeroPartition: true,
+				targetPartition: "non_existent_partition",
+			},
+			expectedError: true,
+		},
+		{
+			name:             "Add voter without zero partition",
+			numNodes:         3,
+			addZeroPartition: false,
+			addTestPartition: false,
+			voterToAdd: struct {
+				id              string
+				address         string
+				inZeroPartition bool
+				targetPartition string
+			}{
+				id:              "voter5",
+				address:         "voter5_addr",
+				inZeroPartition: false,
+				targetPartition: partition.Zero,
+			},
+			expectedError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Create cluster
+			c, err := createCluster(t, tc.numNodes)
+			require.NoError(t, err)
+
+			// Connect nodes
+			for i := 0; i < tc.numNodes; i++ {
+				for j := 0; j < tc.numNodes; j++ {
+					if i == j {
+						continue
+					}
+					c.trans[i].Connect(c.addr[j], c.trans[j])
+				}
+			}
+
+			// Prepare configuration
+			configuration := raft.Configuration{}
+			for i := 0; i < tc.numNodes; i++ {
+				configuration.Servers = append(configuration.Servers, raft.Server{
+					ID:      c.id[i],
+					Address: c.addr[i],
+				})
+			}
+
+			// Bootstrap cluster if required
+			if tc.addZeroPartition {
+				f := c.mr[0].BootstrapCluster(configuration, partition.Zero)
+				require.NoError(t, f.Error())
+
+				err = waitForLeader(c, partition.Zero)
+				require.NoError(t, err)
+
+				// If voter needs to be in zero partition
+				if tc.voterToAdd.inZeroPartition {
+					indexFuture := c.mr[0].AddVoter(raft.ServerID(tc.voterToAdd.id), raft.ServerAddress(tc.voterToAdd.address), 0, time.Second)
+					require.NoError(t, indexFuture.Error())
+				}
+
+				// Add test partition if required
+				if tc.addTestPartition {
+					f = c.mr[0].AddPartition(configuration, "test_partition")
+					require.NoError(t, f.Error())
+
+					err = waitForLeader(c, "test_partition")
+					require.NoError(t, err)
+				}
+			}
+
+			// Add voter to partition
+			indexFuture := c.mr[0].AddVoterToPartition(
+				raft.ServerID(tc.voterToAdd.id),
+				raft.ServerAddress(tc.voterToAdd.address),
+				0,
+				time.Second,
+				partition.Typ(tc.voterToAdd.targetPartition),
+			)
+
+			if tc.expectedError {
+				require.Error(t, indexFuture.Error())
+			} else {
+				require.NoError(t, indexFuture.Error())
+			}
+		})
+	}
+}
